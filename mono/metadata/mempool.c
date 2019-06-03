@@ -687,4 +687,32 @@ mono_mempool_free(MonoMemPool* pool, void* addr, uint32_t size)
 	
 	return mono_mempool_unused_insert(pool, addr, size, start);
 }
+
+
+void momo_mempool_profiler(MonoMemPool *pool)
+{
+	if (!pool)
+		return;
+	MonoMemPool *p;
+	int count = 0;
+	guint32 still_free = 0;
+
+	p = pool;
+	while (p) {
+		p = p->next;
+		count++;
+	}
+	MonoUnusedEntity* unuseds = pool->unuseds;
+	while (unuseds)
+	{
+		still_free += unuseds->size;
+		unuseds = unuseds->next;
+	}
+	still_free += pool->end - pool->pos;
+	g_print("Mempool %p stats:\n", pool);
+	g_print("Total mem allocated: %d\n", pool->d.allocated);
+	g_print("Num chunks: %d\n", count);
+	g_print("Free memory: %d\n", still_free);
+	
+}
 // extend end

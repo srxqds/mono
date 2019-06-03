@@ -254,6 +254,8 @@ void mono_mini_remove_trampoline_for_unused_assembly(MonoDomain* domain, MonoAss
 void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 
+void mono_domain_profiler(MonoDomain* domain);
+
 // extend end
 
 MONO_END_DECLS

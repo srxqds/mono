@@ -46,6 +46,8 @@ mono_mempool_get_allocated (MonoMemPool *pool);
 // extend by dsqiu
 MONO_API mono_bool
 mono_mempool_free (MonoMemPool *pool, void* addr, uint32_t size);
+MONO_API void
+momo_mempool_profiler(MonoMemPool *pool);
 // extend end
 
 #endif

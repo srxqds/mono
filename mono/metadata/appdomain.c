@@ -3187,6 +3187,7 @@ void
 mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 {
 	MonoDomain* domain = mono_domain_get();
+	mono_domain_profiler(domain);
 	// 先确保对象释放回收
 	mono_domain_code_gc_init(domain, assembly);
 	mono_domain_mempool_gc_init(domain, assembly);
@@ -3323,8 +3324,7 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 	mono_domain_code_track_clear(domain, assembly);
 	mono_domain_code_gc_clear(domain, assembly);
 	mono_domain_mempool_gc_clear(domain, assembly);
-
-	
+	mono_domain_profiler(domain);
 }
 
 // extend end

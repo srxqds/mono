@@ -263,7 +263,6 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 	return TRUE;
 }
 
-
 static gpointer
 mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 {
@@ -857,5 +856,40 @@ mono_code_chunk_free(MonoCodeManager* cman, void* addr, int size)
 	if(!chunk)
 		return FALSE;
 	return mono_code_unused_insert(cman, addr, size, chunk);
+}
+
+void mono_code_manager_profiler(MonoCodeManager* cman)
+{
+	if (!cman)
+		return;
+	MonoCodeManager *p;
+	int count = 0;
+	guint32 still_free = 0;
+	CodeChunk *chunk;
+	guint32 size = 0;
+	// guint32 used = 0;
+	for (chunk = cman->current; chunk; chunk = chunk->next) {
+		size += chunk->size;
+		// used += chunk->pos;
+		still_free = chunk->size - chunk->pos;
+		count += 1;
+	}
+	for (chunk = cman->full; chunk; chunk = chunk->next) {
+		size += chunk->size;
+		// used += chunk->pos;
+		still_free = chunk->size - chunk->pos;
+		count += 1;
+	}
+	MonoUnusedEntity* unuseds = cman->unuseds;
+	while (unuseds)
+	{
+		still_free += unuseds->size;
+		unuseds = unuseds->next;
+	}
+	g_print("MonoCodeManager %p stats:\n", cman);
+	g_print("Total mem allocated: %d\n", size);
+	g_print("Num chunks: %d\n", count);
+	g_print("Free memory: %d\n", still_free);
+	
 }
 // extend end

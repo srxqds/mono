@@ -38,6 +38,8 @@ void            mono_code_manager_foreach  (MonoCodeManager *cman, MonoCodeManag
 // extend by dsqiu
 MONO_API mono_bool
 mono_code_chunk_free(MonoCodeManager* cman, void* addr, int size);
+MONO_API void
+mono_code_manager_profiler(MonoCodeManager* cman);
 // extend end
 
 #endif /* __MONO_CODEMAN_H__ */
