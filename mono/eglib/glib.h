@@ -743,6 +743,10 @@ G_EXTERN_C // Used by MonoPosixHelper or MonoSupportW, at least.
 void           g_assertion_message    (const gchar *format, ...) G_GNUC_NORETURN;
 const char *   g_get_assertion_message (void);
 
+// extend by dsqiu
+#define g_trace(format, ...) (g_print("Print at %s:%d,function:%s: " format "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__))
+// extend end
+
 #ifdef HAVE_C99_SUPPORT
 /* The for (;;) tells gc thats g_error () doesn't return, avoiding warnings */
 #define g_error(format, ...)    do { g_log (G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, format, __VA_ARGS__); for (;;); } while (0)
