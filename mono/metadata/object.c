@@ -1703,7 +1703,7 @@ gpointer
 	}
 	generic_virtual_trampolines_size += size;
 
-	return mono_domain_code_reserve (domain, size);
+	return mono_domain_code_reserve (domain, size);  // check by dsqiu
 }
 
 typedef struct _GenericVirtualCase {

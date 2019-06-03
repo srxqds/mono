@@ -7165,9 +7165,12 @@ mono_arch_build_imt_trampoline (MonoVTable *vtable, MonoDomain *domain,
 	if (fail_tramp)
 		code = mono_method_alloc_generic_virtual_trampoline (domain, size);
 	else
-		code = mono_domain_code_reserve (domain, size);
+		code = mono_domain_code_reserve (domain, size);  // check by dsqiu
 
 	start = code;
+	// extend by dsqiu
+	mono_domain_vtable_code_track(vtable, code, size);
+	// extend end
 
 	for (i = 0; i < count; ++i) {
 		MonoIMTCheckItem *item = imt_entries [i];
