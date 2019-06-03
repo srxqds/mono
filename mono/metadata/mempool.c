@@ -713,6 +713,7 @@ void momo_mempool_profiler(MonoMemPool *pool)
 	g_print("Total mem allocated: %d\n", pool->d.allocated);
 	g_print("Num chunks: %d\n", count);
 	g_print("Free memory: %d\n", still_free);
+	g_print("\n");
 	
 }
 // extend end

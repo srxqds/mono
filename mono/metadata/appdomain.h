@@ -226,6 +226,7 @@ MONO_API void
 mono_security_set_core_clr_platform_callback (MonoCoreClrPlatformCB callback);
 
 // extend by dsqiu
+#define SUPPORT_UNLOAD_ASSEMBLY
 typedef struct {
 	MonoAssembly* assembly;
 	MonoDomain* domain;

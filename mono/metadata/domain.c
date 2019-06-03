@@ -2196,9 +2196,9 @@ void mono_domain_mempool_track_clear(MonoDomain* domain, MonoAssembly* assembly)
 {
 	if (domain_mempool_tracks)
 	{
-		_DomainAssemblyData* data;
-		data->assembly = assembly;
-		data->domain = domain;
+		_DomainAssemblyData data;
+		data.assembly = assembly;
+		data.domain = domain;
 		g_hash_table_foreach_remove(domain_mempool_tracks, domain_mempool_track_foreach_remove, &data);
 	}
 }
@@ -2221,9 +2221,9 @@ void mono_domain_code_track_clear(MonoDomain* domain, MonoAssembly* assembly)
 {
 	if (domain_code_tracks)
 	{
-		_DomainAssemblyData* data;
-		data->assembly = assembly;
-		data->domain = domain;
+		_DomainAssemblyData data;
+		data.assembly = assembly;
+		data.domain = domain;
 		g_hash_table_foreach_remove(domain_code_tracks, domain_code_track_foreach_remove, &data);
 	}
 }
@@ -2235,5 +2235,6 @@ void mono_domain_profiler(MonoDomain* domain)
 	g_print("MonoDomain %p stats:\n", domain);
 	momo_mempool_profiler(domain->mp);
 	mono_code_manager_profiler(domain->code_mp);
+	g_print("\n");
 }
 // extend end
