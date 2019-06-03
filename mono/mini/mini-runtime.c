@@ -1443,7 +1443,10 @@ mono_resolve_patch_target (MonoMethod *method, MonoDomain *domain, guint8 *code,
 			if (mono_aot_only) {
 				jump_table = (void **)mono_domain_alloc (domain, sizeof (gpointer) * patch_info->data.table->table_size); // check by dsqiu aot不支持热更
 			} else {
-				jump_table = (void **)mono_domain_code_reserve (domain, sizeof (gpointer) * patch_info->data.table->table_size);
+				jump_table = (void **)mono_domain_code_reserve (domain, sizeof (gpointer) * patch_info->data.table->table_size);  // check by dsqiu
+				// extend by dsqiu
+				mono_domain_method_code_track(method, jump_table, sizeof(gpointer) * patch_info->data.table->table_size);
+				// extend end
 			}
 		}
 

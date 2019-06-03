@@ -360,7 +360,10 @@ mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
 	guint32 size = 32;
 	MonoDomain *domain = mono_domain_get ();
 
-	start = code = mono_domain_code_reserve (domain, size);
+	start = code = mono_domain_code_reserve (domain, size);  // check by dsqiu
+	// extend by dsqiu
+	mono_domain_method_code_track(m, code, size);
+	// extend end
 	code = mono_arm_emit_imm64 (code, ARMREG_IP0, (guint64)addr);
 	arm_addx_imm (code, ARMREG_R0, ARMREG_R0, MONO_ABI_SIZEOF (MonoObject));
 	arm_brx (code, ARMREG_IP0);

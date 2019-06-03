@@ -58,7 +58,10 @@ mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
 
 	this_reg = mono_arch_get_this_arg_reg (NULL);
 
-	start = code = (guint8 *)mono_domain_code_reserve (domain, size + MONO_TRAMPOLINE_UNWINDINFO_SIZE(0));
+	start = code = (guint8 *)mono_domain_code_reserve (domain, size + MONO_TRAMPOLINE_UNWINDINFO_SIZE(0));  // check by dsqiu
+	// extend by dsqiu
+	mono_domain_method_code_track(m, code, size + MONO_TRAMPOLINE_UNWINDINFO_SIZE(0));
+	// extend end
 
 	unwind_ops = mono_arch_get_cie_program ();
 

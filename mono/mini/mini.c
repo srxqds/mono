@@ -2264,9 +2264,12 @@ mono_codegen (MonoCompile *cfg)
 			/* See the comment for cfg->code_domain */
 			code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);
 		else
-			code = (guint8 *)mono_code_manager_reserve (cfg->dynamic_info->code_mp, cfg->code_size + cfg->thunk_area + unwindlen);
+			code = (guint8 *)mono_code_manager_reserve (cfg->dynamic_info->code_mp, cfg->code_size + cfg->thunk_area + unwindlen);  // check by dsqiu ¶¯Ì¬·½·¨
 	} else {
-		code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);
+		code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);  // check by dsqiu
+		// extend by dsqiu
+		mono_domain_method_code_track(cfg->method, code, cfg->code_size + cfg->thunk_area + unwindlen);
+		// extend end
 	}
 
 	if (cfg->thunk_area) {

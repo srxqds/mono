@@ -100,7 +100,10 @@ mono_arch_get_unbox_trampoline (MonoMethod *method, gpointer addr)
 	MonoDomain *domain = mono_domain_get ();
 	char trampName[128];
 
-	start = code = mono_domain_code_reserve (domain, 28);
+	start = code = mono_domain_code_reserve (domain, 28);  // check by dsqiu
+	// extend by dsqiu
+	mono_domain_method_code_track(method, code, 28);
+	// extend end
 
 	S390_SET  (code, s390_r1, addr);
 	s390_aghi (code, this_pos, MONO_ABI_SIZEOF (MonoObject));

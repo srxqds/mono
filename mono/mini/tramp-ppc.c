@@ -87,7 +87,10 @@ mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
 	addr = mono_get_addr_from_ftnptr (addr);
 
 	mono_domain_lock (domain);
-	start = code = mono_domain_code_reserve (domain, size);
+	start = code = mono_domain_code_reserve (domain, size);  // check by dsqiu
+	// extend by dsqiu
+	mono_domain_method_code_track(code, size);
+	// extend end
 	code = mono_ppc_create_pre_code_ftnptr (code);
 	short_branch = branch_for_target_reachable (code + 4, addr);
 	if (short_branch)

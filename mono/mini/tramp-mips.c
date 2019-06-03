@@ -42,7 +42,10 @@ mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
 	guint8 *code, *start;
 	MonoDomain *domain = mono_domain_get ();
 	    
-	start = code = mono_domain_code_reserve (domain, 20);
+	start = code = mono_domain_code_reserve (domain, 20);  // check by dsqiu
+	// extend by dsqiu
+	mono_domain_method_code_track(m, code, 20);
+	// extend end
 
 	mips_load (code, mips_t9, addr);
 	/* The this pointer is kept in a0 */

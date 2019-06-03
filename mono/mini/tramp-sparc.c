@@ -36,7 +36,10 @@ mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
 	guint8 *code, *start;
 	int reg;
 
-	start = code = mono_domain_code_reserve (mono_domain_get (), 36);
+	start = code = mono_domain_code_reserve (mono_domain_get (), 36);   // check by dsqiu
+	// extend by dsqiu
+	mono_domain_method_code_track(m, code, 36);
+	// extend end
 
 	/* This executes in the context of the caller, hence o0 */
 	sparc_add_imm (code, 0, sparc_o0, MONO_ABI_SIZEOF (MonoObject), sparc_o0);
