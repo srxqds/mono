@@ -2237,7 +2237,6 @@ mono_domain_remove_unloadable_assembly(MonoDomain* domain, const char* assembly_
 static gboolean
 mono_domain_contain_unloadable_assembly(const char* assembly_name)
 {
-	return FALSE;
 	if (!unloadable_assemblies)
 		return FALSE;
 	int i;
@@ -2254,17 +2253,17 @@ mono_domain_contain_unloadable_assembly(const char* assembly_name)
 static GHashTable* domain_mempool_tracks;
 static GHashTable* domain_code_tracks;
 
-static void mono_domain_add_mempool_tracks(MonoVTable* vtable, void* addr, uint32_t size)
+static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_t size)
 {
 	if (!domain_mempool_tracks)
 	{
 		domain_mempool_tracks = g_hash_table_new(NULL, NULL);
 	}
-	GPtrArray* array = g_hash_table_lookup(domain_mempool_tracks, vtable);
+	GPtrArray* array = g_hash_table_lookup(domain_mempool_tracks, klass);
 	if (!array)
 	{
 		array = g_ptr_array_new();
-		g_hash_table_insert(domain_mempool_tracks, vtable, array);
+		g_hash_table_insert(domain_mempool_tracks, klass, array);
 	}
 	_GCEntity* entity = mono_domain_alloc0(mono_domain_get(), sizeof(_GCEntity));
 	entity->addr = addr;
@@ -2273,17 +2272,17 @@ static void mono_domain_add_mempool_tracks(MonoVTable* vtable, void* addr, uint3
 
 }
 
-static void mono_domain_add_code_tracks(MonoVTable* vtable, void* addr, uint32_t size)
+static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t size)
 {
 	if (!domain_code_tracks)
 	{
 		domain_code_tracks = g_hash_table_new(NULL, NULL);
 	}
-	GPtrArray* array = g_hash_table_lookup(domain_code_tracks, vtable);
+	GPtrArray* array = g_hash_table_lookup(domain_code_tracks, klass);
 	if (!array)
 	{
 		array = g_ptr_array_new();
-		g_hash_table_insert(domain_code_tracks, vtable, array);
+		g_hash_table_insert(domain_code_tracks, klass, array);
 	}
 	_GCEntity* entity = mono_domain_alloc0(mono_domain_get(), sizeof(_GCEntity));
 	entity->addr = addr;
@@ -2293,30 +2292,31 @@ static void mono_domain_add_code_tracks(MonoVTable* vtable, void* addr, uint32_t
 
 void mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size)
 {
+	return;
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
-	mono_domain_vtable_mempool_track(mono_class_vtable(mono_domain_get(), method->klass), addr, size);
+	mono_domain_vtable_mempool_track(method->klass, addr, size);
 }
 
 void mono_domain_method_code_track(MonoMethod* method, void* addr, uint32_t size)
 {
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
-	mono_domain_vtable_code_track(mono_class_vtable(mono_domain_get(), method->klass), addr, size);
+	mono_domain_vtable_code_track(method->klass, addr, size);
 }
 
 void mono_domain_vtable_mempool_track(MonoVTable* vtable, void* addr, uint32_t size)
 {
 	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
-	mono_domain_add_mempool_tracks(vtable, addr, size);
+	mono_domain_add_mempool_tracks(vtable->klass, addr, size);
 }
 
 void mono_domain_vtable_code_track(MonoVTable* vtable, void* addr, uint32_t size)
 {
 	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
-	mono_domain_add_code_tracks(vtable, addr, size);
+	mono_domain_add_code_tracks(vtable->klass, addr, size);
 }
 
 static gboolean
@@ -2325,7 +2325,7 @@ domain_mempool_track_foreach_remove(gpointer key, gpointer value, gpointer user_
 	MonoVTable* vtable = (MonoVTable*)key;
 	GPtrArray* array = (GPtrArray*)value;
 	_DomainAssemblyData* data = (_DomainAssemblyData *)user_data;
-	if (vtable->klass->image = data->assembly->image)
+	if (vtable->klass->image == data->assembly->image)
 	{
 		mono_domain_mempool_array_clear(data->domain, data->assembly, &array);
 		return TRUE;
@@ -2350,7 +2350,7 @@ domain_code_track_foreach_remove(gpointer key, gpointer value, gpointer user_dat
 	MonoVTable* vtable = (MonoVTable*)key;
 	GPtrArray* array = (GPtrArray*)value;
 	_DomainAssemblyData* data = (_DomainAssemblyData *)user_data;
-	if (vtable->klass->image = data->assembly->image)
+	if (vtable->klass->image == data->assembly->image)
 	{
 		mono_domain_code_array_clear(data->domain, data->assembly, &array);
 		return TRUE;
