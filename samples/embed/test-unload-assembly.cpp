@@ -31,25 +31,31 @@ main(int argc, char* argv[]) {
 	bool value = mono_domain_set(newDomain, false);
 	MonoImageOpenStatus status;
 	MonoAssembly* firtAssembly = mono_assembly_open("F:\\trunk_branch\\custom_software\\MonoEmbedded\\TestCSharp\\Plugins\\UnrealMono\\tools\\Test\\UnloadAssemblySecond\\bin\\Debug\\UnloadAssemblyFirst.dll", &status);
+	MonoDomain* domainToUnload = mono_domain_get();
+	MonoImage* firstImage = mono_assembly_get_image(firtAssembly);
+	MonoClass* firstClass = mono_class_from_name(firstImage, "UnloadAssemblyFirst", "TestFirst");
+	MonoMethod* firstStaticMethod = mono_class_get_method_from_name(firstClass, "FirstStaticMethod", 0);
+	mono_runtime_invoke(firstStaticMethod, NULL, NULL, NULL);
+	mono_domain_set_trace(1);
 	MonoAssembly* secondAssembly = mono_assembly_open("F:\\trunk_branch\\custom_software\\MonoEmbedded\\TestCSharp\\Plugins\\UnrealMono\\tools\\Test\\UnloadAssemblySecond\\bin\\Debug\\UnloadAssemblySecond.dll", &status);
 	MonoImage* ScriptImage = mono_assembly_get_image(secondAssembly);
 	MonoClass* monoFooClass = mono_class_from_name(ScriptImage, "UnloadAssemblySecond", "TestSecond");
 	MonoMethod* staticMethod = mono_class_get_method_from_name(monoFooClass, "Entry", 0);
 	mono_runtime_invoke(staticMethod, NULL, NULL, NULL);
-	MonoDomain* domainToUnload = mono_domain_get();
 	mono_domain_remove_unused_assembly(secondAssembly);
-	MonoImage* firstImage = mono_assembly_get_image(firtAssembly);
-	MonoClass* firstClass = mono_class_from_name(firstImage, "UnloadAssemblyFirst", "TestFirst");
-	MonoMethod* firstStaticMethod = mono_class_get_method_from_name(firstClass, "FirstStaticMethod", 0);
-	mono_runtime_invoke(firstStaticMethod, NULL, NULL, NULL);
-
-	// 在加载一次
-	secondAssembly = mono_assembly_open("F:\\trunk_branch\\custom_software\\MonoEmbedded\\TestCSharp\\Plugins\\UnrealMono\\tools\\Test\\UnloadAssemblySecond\\bin\\Debug\\UnloadAssemblySecond.dll", &status);
-	ScriptImage = mono_assembly_get_image(secondAssembly);
-	monoFooClass = mono_class_from_name(ScriptImage, "UnloadAssemblySecond", "TestSecond");
-	staticMethod = mono_class_get_method_from_name(monoFooClass, "Entry", 0);
-	mono_runtime_invoke(staticMethod, NULL, NULL, NULL);
-	mono_domain_remove_unused_assembly(secondAssembly);
+	mono_domain_set_trace(0);
+	for (int i = 0; i < 1; i++)
+	{
+		// 再加载一次
+		mono_domain_set_trace(1);
+		secondAssembly = mono_assembly_open("F:\\trunk_branch\\custom_software\\MonoEmbedded\\TestCSharp\\Plugins\\UnrealMono\\tools\\Test\\UnloadAssemblySecond\\bin\\Debug\\UnloadAssemblySecond.dll", &status);
+		ScriptImage = mono_assembly_get_image(secondAssembly);
+		monoFooClass = mono_class_from_name(ScriptImage, "UnloadAssemblySecond", "TestSecond");
+		staticMethod = mono_class_get_method_from_name(monoFooClass, "Entry", 0);
+		mono_runtime_invoke(staticMethod, NULL, NULL, NULL);
+		mono_domain_remove_unused_assembly(secondAssembly);
+		mono_domain_set_trace(0);
+	}
 	if (domainToUnload && domainToUnload != mono_get_root_domain())
 	{
 		mono_domain_set(mono_get_root_domain(), false);
