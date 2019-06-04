@@ -235,7 +235,9 @@ typedef struct {
 MONO_API void
 mono_domain_remove_unused_assembly(MonoAssembly* assembly);
 MONO_API void
-mono_domain_set_assembly_unloadable(MonoAssembly* assembly);
+mono_domain_add_unloadable_assembly(MonoDomain* domain, const char* assembly_name);
+MONO_API void
+mono_domain_remove_unloadable_assembly(MonoDomain* domain, const char* assembly_name);
 void 
 mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size);
 void 

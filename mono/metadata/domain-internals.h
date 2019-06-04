@@ -617,10 +617,11 @@ void mono_reflection_cleanup_domain (MonoDomain *domain);
 void mono_assembly_cleanup_domain_bindings (guint32 domain_id);
 
 // extend by dsqiu
-MONO_API void mono_assembly_cleanup_domain_binding_for_unused_assembly(guint32 domain_id, MonoAssembly* assembly);
+MONO_API void mono_assembly_cleanup_domain_binding_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_reflection_cleanup_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_jit_info_table_cleanup_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_free(MonoDomain *domain, void* addr, guint size);
+MONO_API void mono_domain_strdup_collect(MonoDomain* domain, const char* str);
 MONO_API void mono_domain_code_free(MonoDomain* domain, void* addr, guint size);
 MONO_API void mono_domain_code_gc_init(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_gc_init(MonoDomain* domain, MonoAssembly* assembly);

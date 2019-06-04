@@ -2055,7 +2055,7 @@ mono_domain_diff_mem_track()
 	if (!mem_addr_size_tracks)
 		return;
 	int i = 0;
-	g_print("mono_domain_diff_mem_track: \n");
+	g_print("mono_domain_diff_mem_track size %d: \n", mem_addr_size_tracks->len);
 	for (i = 0; i < mem_addr_size_tracks->len; i++)
 	{
 		_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
@@ -2120,6 +2120,7 @@ mono_domain_mempool_gc_init(MonoDomain* domain, MonoAssembly* assembly)
 	}
 	mempool_gc_collects = g_ptr_array_new();
 }
+
 void
 mono_domain_code_gc_init(MonoDomain* domain, MonoAssembly* assembly)
 {
@@ -2129,6 +2130,7 @@ mono_domain_code_gc_init(MonoDomain* domain, MonoAssembly* assembly)
 	}
 	code_gc_collects = g_ptr_array_new();
 }
+
 void
 mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size)
 {
@@ -2137,6 +2139,7 @@ mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size)
 	entity->size = size;
 	g_ptr_array_add(mempool_gc_collects, entity);
 }
+
 void
 mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size)
 {
@@ -2146,7 +2149,18 @@ mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size)
 	g_ptr_array_add(code_gc_collects, entity);
 }
 
-static void mono_domain_code_array_clear(MonoDomain* domain, MonoAssembly* assembly, GPtrArray** array_ptr)
+void mono_domain_strdup_collect(MonoDomain* domain, const char* str)
+{
+	if (!str)
+		return;
+	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
+	entity->addr = str;
+	entity->size = strlen(str) + 1;
+	g_ptr_array_add(mempool_gc_collects, entity);
+}
+
+static void
+mono_domain_code_array_clear(MonoDomain* domain, MonoAssembly* assembly, GPtrArray** array_ptr)
 {
 	GPtrArray* array = *array_ptr;
 	int index = 0;
@@ -2186,9 +2200,55 @@ mono_domain_mempool_gc_clear(MonoDomain* domain, MonoAssembly* assembly)
 	mono_domain_mempool_array_clear(domain, assembly, &mempool_gc_collects);
 }
 
-void mono_domain_set_assembly_unloadable(MonoAssembly* assembly)
+static GPtrArray* unloadable_assemblies = NULL;
+void 
+mono_domain_add_unloadable_assembly(MonoDomain* domain, const char* assembly_name)
 {
+	if (!unloadable_assemblies)
+		unloadable_assemblies = g_ptr_array_new();
+	int i;
+	for (i = 0; i < unloadable_assemblies->len; i++)
+	{
+		if (strcmp(assembly_name, (char*)g_ptr_array_index(unloadable_assemblies, i)) == 0)
+			return;
+	}
+	char* ass_name = mono_mempool_strdup(domain->mp, assembly_name);
+	g_ptr_array_add(unloadable_assemblies, ass_name);
+}
 
+void 
+mono_domain_remove_unloadable_assembly(MonoDomain* domain, const char* assembly_name)
+{
+	if (!unloadable_assemblies)
+		return;
+	int i;
+	for (i = 0; i < unloadable_assemblies->len; i++)
+	{
+		char* ass_name = (char*)g_ptr_array_index(unloadable_assemblies, i);
+		if (strcmp(assembly_name, ass_name) == 0)
+		{
+			mono_mempool_strdup_free(domain->mp, ass_name);
+			g_ptr_array_remove_index(unloadable_assemblies, i);
+			return;
+		}
+	}
+}
+
+static gboolean
+mono_domain_contain_unloadable_assembly(const char* assembly_name)
+{
+	return FALSE;
+	if (!unloadable_assemblies)
+		return FALSE;
+	int i;
+	for (i = 0; i < unloadable_assemblies->len; i++)
+	{
+		if (strcmp(assembly_name, (char*)g_ptr_array_index(unloadable_assemblies, i)) == 0)
+		{
+			return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 static GHashTable* domain_mempool_tracks;
@@ -2233,28 +2293,28 @@ static void mono_domain_add_code_tracks(MonoVTable* vtable, void* addr, uint32_t
 
 void mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size)
 {
-	if (!method || strcmp(method->klass->image->name, "UnloadAssemblySecond"))
+	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
 	mono_domain_vtable_mempool_track(mono_class_vtable(mono_domain_get(), method->klass), addr, size);
 }
 
 void mono_domain_method_code_track(MonoMethod* method, void* addr, uint32_t size)
 {
-	if (!method || strcmp(method->klass->image->name, "UnloadAssemblySecond"))
+	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
 	mono_domain_vtable_code_track(mono_class_vtable(mono_domain_get(), method->klass), addr, size);
 }
 
 void mono_domain_vtable_mempool_track(MonoVTable* vtable, void* addr, uint32_t size)
 {
-	if (!vtable || strcmp(vtable->klass->image->name, "UnloadAssemblySecond"))
+	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
 	mono_domain_add_mempool_tracks(vtable, addr, size);
 }
 
 void mono_domain_vtable_code_track(MonoVTable* vtable, void* addr, uint32_t size)
 {
-	if (!vtable || strcmp(vtable->klass->image->name, "UnloadAssemblySecond"))
+	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
 	mono_domain_add_code_tracks(vtable, addr, size);
 }

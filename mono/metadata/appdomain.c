@@ -3243,7 +3243,7 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 
 	deregister_reflection_info_roots_for_unused_assembly(domain, assembly);
 
-	mono_assembly_cleanup_domain_binding_for_unused_assembly(domain->domain_id, assembly);
+	mono_assembly_cleanup_domain_binding_for_unused_assembly(domain, assembly);
 	// mono_domain_free
 	// mono_debug_domain_unload
 	// special_static_fields

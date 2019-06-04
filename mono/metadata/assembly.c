@@ -3773,14 +3773,14 @@ assembly_binding_info_parsed (MonoAssemblyBindingInfo *info, void *user_data)
 			return;
 	}
 
-	info_copy = (MonoAssemblyBindingInfo *)mono_mempool_alloc0 (domain->mp, sizeof (MonoAssemblyBindingInfo));
+	info_copy = (MonoAssemblyBindingInfo *)mono_mempool_alloc0 (domain->mp, sizeof (MonoAssemblyBindingInfo));  // check by dsqiu
 	memcpy (info_copy, info, sizeof (MonoAssemblyBindingInfo));
 	if (info->name)
-		info_copy->name = mono_mempool_strdup (domain->mp, info->name);
+		info_copy->name = mono_mempool_strdup (domain->mp, info->name);  // check by dsqiu
 	if (info->culture)
-		info_copy->culture = mono_mempool_strdup (domain->mp, info->culture);
+		info_copy->culture = mono_mempool_strdup (domain->mp, info->culture);   // check by dsqiu
 
-	domain->assembly_bindings = g_slist_append_mempool (domain->mp, domain->assembly_bindings, info_copy);
+	domain->assembly_bindings = g_slist_append_mempool (domain->mp, domain->assembly_bindings, info_copy);  // check by dsqiu
 }
 
 static int
@@ -4837,12 +4837,14 @@ mono_asmctx_get_name (const MonoAssemblyContext *asmctx)
 
 
 // extend by dsqiu
-void mono_assembly_cleanup_domain_binding_for_unused_assembly(guint32 domain_id, MonoAssembly* assembly)
+// 没有验证过
+void mono_assembly_cleanup_domain_binding_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
 {
 	GSList **iter;
 	MonoAssemblyName aname = assembly->aname;
 	mono_assembly_binding_lock();
 	iter = &loaded_assembly_bindings;
+	gint32 domain_id = domain->domain_id;
 	while (*iter) {
 		GSList *l = *iter;
 		MonoAssemblyBindingInfo *info = (MonoAssemblyBindingInfo *)l->data;
@@ -4851,7 +4853,7 @@ void mono_assembly_cleanup_domain_binding_for_unused_assembly(guint32 domain_id,
 			*iter = l->next;
 			mono_assembly_binding_info_free(info);
 			g_free(info);
-			g_slist_free_1(l);
+			g_slist_delete_link(&loaded_assembly_bindings, l);
 			break;
 		}
 		else {
@@ -4859,5 +4861,24 @@ void mono_assembly_cleanup_domain_binding_for_unused_assembly(guint32 domain_id,
 		}
 	}
 	mono_assembly_binding_unlock();
+
+	//
+	MonoAssemblyBindingInfo *info;
+	GSList *list;
+
+	if (!domain->assembly_bindings)
+		return;
+
+	for (list = domain->assembly_bindings; list; list = list->next) {
+		info = (MonoAssemblyBindingInfo *)list->data;
+		if (info && domain_id == domain->domain_id && strcmp(aname.name, info->name) == 0 && strcmp(aname.culture, info->culture) == 0)
+		{
+			mono_domain_mempool_gc_collect(domain, info, sizeof(MonoAssemblyBindingInfo));
+			mono_domain_strdup_collect(domain, info->name);
+			mono_domain_strdup_collect(domain, info->culture);
+			mono_domain_mempool_gc_collect(domain, list, sizeof(GList));
+			domain->assembly_bindings = g_slist_remove_link(domain->assembly_bindings, list);
+		}
+	}
 }
 // extend end
