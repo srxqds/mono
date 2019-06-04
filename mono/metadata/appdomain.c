@@ -3309,7 +3309,7 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 	mono_object_remove_gerneric_virtual_case_for_unused_assembly(domain, assembly);
 	// mono_assembly_close
 
-	mono_assembly_close(assembly);
+	
 	
 
 	// proxy_vtable_hash: remote_class
@@ -3324,6 +3324,7 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 	mono_domain_code_track_clear(domain, assembly);
 	mono_domain_code_gc_clear(domain, assembly);
 	mono_domain_mempool_gc_clear(domain, assembly);
+	mono_assembly_close(assembly);
 	mono_domain_profiler(domain);
 }
 
