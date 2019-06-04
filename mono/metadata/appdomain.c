@@ -3318,13 +3318,15 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 	// jit_info_table
 	// finalizable_objects_hash:好像没用
 	// generic_virtual_cases:是jit的东西？
-	domain->domain_assemblies = g_slist_remove(domain->domain_assemblies, assembly);
-	
+
 	mono_domain_mempool_track_clear(domain, assembly);
 	mono_domain_code_track_clear(domain, assembly);
+
+	mono_assembly_close(assembly);
+	domain->domain_assemblies = g_slist_remove(domain->domain_assemblies, assembly);
+	
 	mono_domain_code_gc_clear(domain, assembly);
 	mono_domain_mempool_gc_clear(domain, assembly);
-	mono_assembly_close(assembly);
 	mono_domain_profiler(domain);
 }
 
