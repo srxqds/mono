@@ -2261,8 +2261,13 @@ mono_codegen (MonoCompile *cfg)
 		mono_domain_unlock (cfg->domain);
 
 		if (mono_using_xdebug)
+		{
 			/* See the comment for cfg->code_domain */
-			code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);
+			code = (guint8 *)mono_domain_code_reserve(code_domain, cfg->code_size + cfg->thunk_area + unwindlen);  // check by dsqiu
+			// extend by dsqiu
+			mono_domain_method_code_track(cfg->method, code, cfg->code_size + cfg->thunk_area + unwindlen);
+			// extend end
+		}
 		else
 			code = (guint8 *)mono_code_manager_reserve (cfg->dynamic_info->code_mp, cfg->code_size + cfg->thunk_area + unwindlen);  // check by dsqiu ¶¯Ì¬·½·¨
 	} else {
@@ -2357,11 +2362,14 @@ mono_codegen (MonoCompile *cfg)
 
 	if (cfg->method->dynamic) {
 		if (mono_using_xdebug)
-			mono_domain_code_commit (code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+		{
+			mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+		}
 		else
 			mono_code_manager_commit (cfg->dynamic_info->code_mp, cfg->native_code, cfg->code_size, cfg->code_len);
 	} else {
 		mono_domain_code_commit (code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+
 	}
 	MONO_PROFILER_RAISE (jit_code_buffer, (cfg->native_code, cfg->code_len, MONO_PROFILER_CODE_BUFFER_METHOD, cfg->method));
 	

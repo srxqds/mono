@@ -809,14 +809,16 @@ void*
  * already from the code manager, we can get back the excess allocation
  * for later use in the code manager.
  */
-void
+mono_bool
 mono_code_manager_commit (MonoCodeManager *cman, void *data, int size, int newsize)
 {
 	g_assert (newsize <= size);
 
 	if (cman->current && (size != newsize) && (data == cman->current->data + cman->current->pos - size)) {
 		cman->current->pos -= size - newsize;
+		return TRUE;
 	}
+	return FALSE;
 }
 
 /**

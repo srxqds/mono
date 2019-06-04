@@ -1392,6 +1392,33 @@ void*
 
 	return res;
 }
+// extend by dsqiu
+typedef struct {
+	gpointer addr;
+	guint size;
+} _GCEntity;
+
+static GPtrArray* mem_addr_size_tracks = NULL;
+
+static GHashTable* domain_mempool_tracks = NULL;
+static GHashTable* domain_code_tracks = NULL;
+static void code_tracks_foreach(gpointer key, gpointer value, gpointer user_data)
+{
+	_GCEntity* data = (_GCEntity*)user_data;
+	_GCEntity* track;
+	GPtrArray* list = (GPtrArray*)value;
+	int i;
+	for (i = 0; i < list->len; i++)
+	{
+		track = (_GCEntity*)g_ptr_array_index(list, i);
+		if (track->addr == data->addr)
+		{
+			track->size = data->size;
+			break;
+		}
+	}
+}
+// extend end
 
 /*
  * mono_domain_code_commit:
@@ -1402,7 +1429,27 @@ void
 mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize)
 {
 	mono_domain_lock (domain);
-	mono_code_manager_commit (domain->code_mp, data, size, newsize);
+	// mono_code_manager_commit(domain->code_mp, data, size, newsize);
+	// extend by dsqiu
+	// reset track size
+	if (mono_code_manager_commit(domain->code_mp, data, size, newsize))
+	{
+		if (mem_addr_size_tracks)
+		{
+			int i = 0;
+			for (i = 0; i < mem_addr_size_tracks->len; i++)
+			{
+				_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
+				if (value->addr == data && value->size == size)
+				{
+					value->size = newsize;
+					g_hash_table_foreach(domain_code_tracks, code_tracks_foreach, value);
+					break;
+				}
+			}
+		}
+	}
+	// extend end
 	mono_domain_unlock (domain);
 }
 
@@ -2005,13 +2052,6 @@ mono_domain_get_assemblies (MonoDomain *domain, gboolean refonly)
 
 // extend by dsqiu
 
-typedef struct {
-	gpointer addr;
-	guint size;
-} _GCEntity;
-
-static GPtrArray* mem_addr_size_tracks;
-
 static void 
 mono_domain_add_mem_track(gpointer addr, guint size)
 {
@@ -2250,8 +2290,6 @@ mono_domain_contain_unloadable_assembly(const char* assembly_name)
 	return FALSE;
 }
 
-static GHashTable* domain_mempool_tracks;
-static GHashTable* domain_code_tracks;
 
 static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_t size)
 {
@@ -2295,14 +2333,14 @@ void mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t s
 	return;
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
-	mono_domain_vtable_mempool_track(method->klass, addr, size);
+	mono_domain_add_mempool_tracks(method->klass, addr, size);
 }
 
 void mono_domain_method_code_track(MonoMethod* method, void* addr, uint32_t size)
 {
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
-	mono_domain_vtable_code_track(method->klass, addr, size);
+	mono_domain_add_code_tracks(method->klass, addr, size);
 }
 
 void mono_domain_vtable_mempool_track(MonoVTable* vtable, void* addr, uint32_t size)
@@ -2322,10 +2360,10 @@ void mono_domain_vtable_code_track(MonoVTable* vtable, void* addr, uint32_t size
 static gboolean
 domain_mempool_track_foreach_remove(gpointer key, gpointer value, gpointer user_data)
 {
-	MonoVTable* vtable = (MonoVTable*)key;
+	MonoClass* klass = (MonoClass*)key;
 	GPtrArray* array = (GPtrArray*)value;
 	_DomainAssemblyData* data = (_DomainAssemblyData *)user_data;
-	if (vtable->klass->image == data->assembly->image)
+	if (klass->image == data->assembly->image)
 	{
 		mono_domain_mempool_array_clear(data->domain, data->assembly, &array);
 		return TRUE;
@@ -2347,10 +2385,10 @@ void mono_domain_mempool_track_clear(MonoDomain* domain, MonoAssembly* assembly)
 static gboolean
 domain_code_track_foreach_remove(gpointer key, gpointer value, gpointer user_data)
 {
-	MonoVTable* vtable = (MonoVTable*)key;
+	MonoClass* klass = (MonoClass*)key;
 	GPtrArray* array = (GPtrArray*)value;
 	_DomainAssemblyData* data = (_DomainAssemblyData *)user_data;
-	if (vtable->klass->image == data->assembly->image)
+	if (klass->image == data->assembly->image)
 	{
 		mono_domain_code_array_clear(data->domain, data->assembly, &array);
 		return TRUE;
