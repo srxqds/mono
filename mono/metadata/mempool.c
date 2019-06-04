@@ -21,6 +21,7 @@
 #include "mempool.h"
 #include "mempool-internals.h"
 #include "utils/unlocked.h"
+#include <mono/utils/mono-logger-internals.h>
 
 /*
  * MonoMemPool is for fast allocation of memory. We free

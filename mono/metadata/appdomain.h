@@ -256,6 +256,8 @@ void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, Mo
 void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 
 void mono_domain_profiler(MonoDomain* domain);
+MONO_API void
+mono_domain_set_trace(mono_bool enable);
 
 // extend end
 

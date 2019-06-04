@@ -867,16 +867,16 @@ void mono_code_manager_profiler(MonoCodeManager* cman)
 	guint32 still_free = 0;
 	CodeChunk *chunk;
 	guint32 size = 0;
-	// guint32 used = 0;
+	guint32 used = 0;
 	for (chunk = cman->current; chunk; chunk = chunk->next) {
 		size += chunk->size;
-		// used += chunk->pos;
+		used += chunk->pos;
 		still_free = chunk->size - chunk->pos;
 		count += 1;
 	}
 	for (chunk = cman->full; chunk; chunk = chunk->next) {
 		size += chunk->size;
-		// used += chunk->pos;
+		used += chunk->pos;
 		still_free = chunk->size - chunk->pos;
 		count += 1;
 	}
@@ -888,6 +888,7 @@ void mono_code_manager_profiler(MonoCodeManager* cman)
 	}
 	g_print("MonoCodeManager %p stats:\n", cman);
 	g_print("Total mem allocated: %d\n", size);
+	g_print("Chunk mem used: %d\n", used);
 	g_print("Num chunks: %d\n", count);
 	g_print("Free memory: %d\n", still_free);
 	g_print("\n");

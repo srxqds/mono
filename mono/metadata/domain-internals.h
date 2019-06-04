@@ -521,12 +521,12 @@ mono_is_shadow_copy_enabled (MonoDomain *domain, const gchar *dir_name);
 gpointer
 mono_domain_alloc  (MonoDomain *domain, guint size);
 
-#define mono_domain_alloc(domain, size) (g_cast (mono_domain_alloc ((domain), (size))))
+#define mono_domain_alloc(domain, size) (g_cast (mono_domain_alloc_with_trace ((domain), (size), __FILE__, __func__, __LINE__)))
 
 gpointer
 mono_domain_alloc0 (MonoDomain *domain, guint size);
 
-#define mono_domain_alloc0(domain, size) (g_cast (mono_domain_alloc0 ((domain), (size))))
+#define mono_domain_alloc0(domain, size) (g_cast (mono_domain_alloc0_with_trace ((domain), (size), __FILE__, __func__, __LINE__)))
 
 gpointer
 mono_domain_alloc0_lock_free (MonoDomain *domain, guint size);
@@ -536,12 +536,12 @@ mono_domain_alloc0_lock_free (MonoDomain *domain, guint size);
 void*
 mono_domain_code_reserve (MonoDomain *domain, int size) MONO_LLVM_INTERNAL;
 
-#define mono_domain_code_reserve(domain, size) (g_cast (mono_domain_code_reserve ((domain), (size))))
+#define mono_domain_code_reserve(domain, size) (g_cast (mono_domain_code_reserve_with_trace ((domain), (size), __FILE__, __func__, __LINE__)))
 
 void*
 mono_domain_code_reserve_align (MonoDomain *domain, int size, int alignment);
 
-#define mono_domain_code_reserve_align(domain, size, align) (g_cast (mono_domain_code_reserve_align ((domain), (size), (align))))
+#define mono_domain_code_reserve_align(domain, size, align) (g_cast (mono_domain_code_reserve_align_with_trace ((domain), (size), (align), __FILE__, __func__, __LINE__)))
 
 void
 mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize);
@@ -630,6 +630,15 @@ MONO_API void mono_domain_code_gc_clear(MonoDomain* domain, MonoAssembly* assemb
 MONO_API void mono_domain_mempool_gc_clear(MonoDomain* domain, MonoAssembly* assembly);
 
 void mono_domain_remove_jit_info_for_method(MonoDomain* domain, MonoMethod* method);
+
+gpointer
+mono_domain_alloc_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line);
+gpointer
+mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line);
+gpointer
+mono_domain_code_reserve_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line);
+gpointer
+mono_domain_code_reserve_align_with_trace(MonoDomain* domain, guint size, guint align, char *file, char* function, int line);
 // extend end
 
 MonoJitInfo* mono_jit_info_table_find_internal (MonoDomain *domain, gpointer addr, gboolean try_aot, gboolean allow_trampolines);
