@@ -27,8 +27,10 @@ main(int argc, char* argv[]) {
 	mono_add_internal_call("UnloadAssemblySecond.TestSecond::InternalMethod", internal_test);
 	mono_add_internal_call("UnloadAssemblySecond.TestSecond::InternalMethod1", internal_test1);
 	mono_add_internal_call("UnloadAssemblySecond.TestSecond::InternalFloatMethod", internal_test_float);
-	MonoDomain* newDomain = mono_domain_create_appdomain("UnrealDomain", NULL);
-	bool value = mono_domain_set(newDomain, false);
+	//MonoDomain* newDomain = mono_domain_create_appdomain("UnrealDomain", NULL);
+	mono_domain_add_unloadable_assembly(domain, "UnloadAssemblySecond");
+	mono_domain_add_unloadable_assembly(domain, "UnloadAssemblySecond");
+	//bool value = mono_domain_set(newDomain, false);
 	MonoImageOpenStatus status;
 	MonoAssembly* firtAssembly = mono_assembly_open("F:\\trunk_branch\\custom_software\\MonoEmbedded\\TestCSharp\\Plugins\\UnrealMono\\tools\\Test\\UnloadAssemblySecond\\bin\\Debug\\UnloadAssemblyFirst.dll", &status);
 	MonoDomain* domainToUnload = mono_domain_get();
@@ -56,12 +58,13 @@ main(int argc, char* argv[]) {
 		mono_domain_remove_unused_assembly(secondAssembly);
 		mono_domain_set_trace(0);
 	}
-	if (domainToUnload && domainToUnload != mono_get_root_domain())
-	{
-		mono_domain_set(mono_get_root_domain(), false);
-		//mono_thread_pop_appdomain_ref();
-		mono_domain_unload(domainToUnload);
-	}
+	mono_domain_remove_unloadable_assembly(domain, "UnloadAssemblySecond");
+	//if (domainToUnload && domainToUnload != mono_get_root_domain())
+	//{
+	//	mono_domain_set(mono_get_root_domain(), false);
+	//	//mono_thread_pop_appdomain_ref();
+	//	mono_domain_unload(domainToUnload);
+	//}
 	mono_jit_cleanup(domain);
 	return 0;
 }
