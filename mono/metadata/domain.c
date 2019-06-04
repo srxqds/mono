@@ -1425,15 +1425,17 @@ static void code_tracks_foreach(gpointer key, gpointer value, gpointer user_data
  *
  * LOCKING: Acquires the domain lock.
  */
-void
+gboolean
 mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize)
 {
 	mono_domain_lock (domain);
 	// mono_code_manager_commit(domain->code_mp, data, size, newsize);
 	// extend by dsqiu
 	// reset track size
+	gboolean res = FALSE;
 	if (mono_code_manager_commit(domain->code_mp, data, size, newsize))
 	{
+		res = TRUE;
 		if (mem_addr_size_tracks)
 		{
 			int i = 0;
@@ -1451,6 +1453,7 @@ mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize)
 	}
 	// extend end
 	mono_domain_unlock (domain);
+	return res;
 }
 
 /*

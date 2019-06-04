@@ -1054,7 +1054,8 @@ mono_jit_info_remove_for_method(MonoDomain* domain, MonoJitInfo *jit_info)
 			mono_domain_mempool_gc_collect(domain, gi->locations, gi->nlocs * sizeof(MonoDwarfLocListEntry));
 		}
 	}
-	mono_domain_code_gc_collect(domain, jit_info->code_start, jit_info->code_size);
+	
+	mono_domain_code_gc_collect(domain, jit_info->code_start, jit_info->code_alloc > jit_info->code_size ? jit_info->code_alloc : jit_info->code_size);
 	mono_domain_mempool_gc_collect(domain, jit_info, jit_info->alloc_size);
 	// mini-trampolines.c:1491
 	jit_info_table_remove(domain->jit_info_table, jit_info);

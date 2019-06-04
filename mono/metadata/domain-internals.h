@@ -229,6 +229,7 @@ struct _MonoJitInfo {
 	int         code_size;
 	// extend by dsqiu
 	guint32 alloc_size;
+	guint32 code_alloc;
 	// extend end
 	guint32     num_clauses:15;
 	/* Whenever the code is domain neutral or 'shared' */
@@ -543,7 +544,7 @@ mono_domain_code_reserve_align (MonoDomain *domain, int size, int alignment);
 
 #define mono_domain_code_reserve_align(domain, size, align) (g_cast (mono_domain_code_reserve_align_with_trace ((domain), (size), (align), __FILE__, __func__, __LINE__)))
 
-void
+gboolean
 mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize);
 
 void

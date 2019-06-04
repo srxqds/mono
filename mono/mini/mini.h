@@ -1308,6 +1308,9 @@ typedef struct {
 
 	unsigned char   *cil_start;
 	unsigned char   *native_code;
+	// extend by dsqiu
+	guint			code_alloc;
+	// extend end
 	guint            code_size;
 	guint            code_len;
 	guint            prolog_end;

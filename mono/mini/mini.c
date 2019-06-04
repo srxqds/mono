@@ -2266,6 +2266,7 @@ mono_codegen (MonoCompile *cfg)
 			code = (guint8 *)mono_domain_code_reserve(code_domain, cfg->code_size + cfg->thunk_area + unwindlen);  // check by dsqiu
 			// extend by dsqiu
 			mono_domain_method_code_track(cfg->method, code, cfg->code_size + cfg->thunk_area + unwindlen);
+			cfg->code_alloc = cfg->code_size + cfg->thunk_area + unwindlen;
 			// extend end
 		}
 		else
@@ -2274,6 +2275,7 @@ mono_codegen (MonoCompile *cfg)
 		code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);  // check by dsqiu
 		// extend by dsqiu
 		mono_domain_method_code_track(cfg->method, code, cfg->code_size + cfg->thunk_area + unwindlen);
+		cfg->code_alloc = cfg->code_size + cfg->thunk_area + unwindlen;
 		// extend end
 	}
 
@@ -2363,12 +2365,25 @@ mono_codegen (MonoCompile *cfg)
 	if (cfg->method->dynamic) {
 		if (mono_using_xdebug)
 		{
-			mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+			// mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+			// extend by dsqiu
+			if (mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len))
+			{
+				cfg->code_alloc -= cfg->code_size - cfg->code_len;
+			}
+			// extend end
+
 		}
 		else
 			mono_code_manager_commit (cfg->dynamic_info->code_mp, cfg->native_code, cfg->code_size, cfg->code_len);
 	} else {
-		mono_domain_code_commit (code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+		// mono_domain_code_commit (code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+		// extend by dsqiu
+		if (mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len))
+		{
+			cfg->code_alloc -= cfg->code_size- cfg->code_len;
+		}
+		// extend end
 
 	}
 	MONO_PROFILER_RAISE (jit_code_buffer, (cfg->native_code, cfg->code_len, MONO_PROFILER_CODE_BUFFER_METHOD, cfg->method));
@@ -2520,6 +2535,7 @@ create_jit_info (MonoCompile *cfg, MonoMethod *method_to_compile)
 		jinfo = (MonoJitInfo *)mono_domain_alloc0(cfg->domain, mono_jit_info_size(flags, num_clauses, num_holes));
 		// extend by dsqiu
 		jinfo->alloc_size = mono_jit_info_size(flags, num_clauses, num_holes);
+		jinfo->code_alloc = cfg->code_alloc;
 		// extend end
 	}
 	jinfo_try_holes_size += num_holes * sizeof (MonoTryBlockHoleJitInfo);
