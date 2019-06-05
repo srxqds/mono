@@ -1550,8 +1550,14 @@ mono_create_jit_trampoline (MonoDomain *domain, MonoMethod *method, MonoError *e
 	if (tramp)
 		return tramp;
 
-	tramp = mono_create_specific_trampoline (method, MONO_TRAMPOLINE_JIT, domain, NULL);
-	
+	// tramp = mono_create_specific_trampoline (method, MONO_TRAMPOLINE_JIT, domain, NULL);
+	// extend by dsqiu
+	int code_size;
+	tramp = mono_create_specific_trampoline(method, MONO_TRAMPOLINE_JIT, domain, &code_size);
+	// NOTICE by dsqiu
+	// 不同分支可能不一样
+	mono_domain_method_code_track(method, tramp, code_size);
+	// extend end
 	mono_domain_lock (domain);
 	g_hash_table_insert (domain_jit_info (domain)->jit_trampoline_hash, method, tramp);
 	UnlockedIncrement (&jit_trampolines);

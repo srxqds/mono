@@ -3672,8 +3672,17 @@ mini_get_vtable_trampoline (MonoVTable *vt, int slot_index)
 		mono_jit_unlock ();
 	}
 
-	if (!vtable_trampolines [index])
-		vtable_trampolines [index] = mono_create_specific_trampoline (GUINT_TO_POINTER (slot_index), MONO_TRAMPOLINE_VCALL, mono_get_root_domain (), NULL);
+	if (!vtable_trampolines[index])
+	{
+		int code_size;
+		// vtable_trampolines[index] = mono_create_specific_trampoline(GUINT_TO_POINTER(slot_index), MONO_TRAMPOLINE_VCALL, mono_get_root_domain(), NULL);
+		vtable_trampolines[index] = mono_create_specific_trampoline(GUINT_TO_POINTER(slot_index), MONO_TRAMPOLINE_VCALL, mono_get_root_domain(), &code_size);
+		// extend by dsqiu
+		// NOTIC by dsqiu
+		// todo:不同的分支返回值都要检查下
+		mono_domain_vtable_code_track(vt, vtable_trampolines[index], code_size);
+		// extend end
+	}
 	return vtable_trampolines [index];
 }
 
@@ -5213,6 +5222,7 @@ delegate_trampoline_hash_foreach_remove(gpointer key, gpointer value, gpointer u
 	MonoImage* image = data->assembly->image;
 	if (pair->klass->image == image || (pair->method && pair->method->klass->image == image))
 	{
+		mono_domain_code_free(data->domain, tramp_info->code_start, tramp_info->code_size);
 		mono_domain_code_gc_collect(data->domain, tramp_info->code_start, tramp_info->code_size);
 		mono_domain_mempool_gc_collect(data->domain, pair, sizeof(MonoClassMethodPair));
 		mono_domain_mempool_gc_collect(data->domain, tramp_info, sizeof(MonoDelegateTrampInfo));
