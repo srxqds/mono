@@ -81,6 +81,8 @@ struct _MonoMemPool {
 	guint8 *end;
 
 	// extend by dsqiu
+
+	mono_bool reusable;
 	// empty->empty->unused_memory->unused_memory
 	MonoUnusedEntity* unuseds;
 	// extend end
@@ -138,6 +140,28 @@ mono_mempool_unused_recycle(MonoMemPool* root, MonoUnusedEntity* reuse_entity)
 	root->unuseds = reuse_entity;
 }
 
+static void
+mono_mempool_unused_status(MonoMemPool* pool)
+{
+	if (!pool || !pool->unuseds)
+		return;
+	// print status
+	int count = 0;
+	guint32 still_free = 0;
+	int empty_count = 0;
+
+	MonoUnusedEntity* unuseds = pool->unuseds;
+	while (unuseds)
+	{
+		still_free += unuseds->size;
+		if (!unuseds->size)
+			empty_count += 1;
+		count += 1;
+		unuseds = unuseds->next;
+
+	}
+	g_print("mono_mempool_unused_status count: %d, empty: %d, size: %d\n", count, empty_count, still_free);
+}
 // insert free memory to unuseds
 static gboolean
 mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMemPool* pool)
@@ -235,6 +259,7 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 	}
 	else
 	{
+		new_entity->next = root->unuseds->next;
 		root->unuseds = new_entity;
 	}
 	return TRUE;
@@ -244,6 +269,8 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 static gpointer
 mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 {
+	if (!root->reusable)
+		return NULL;
 	MonoUnusedEntity* unused_list = root->unuseds;
 	MonoUnusedEntity* pre_entity = NULL;
 	MonoUnusedEntity* reuse_entity = NULL;
@@ -260,7 +287,6 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 			else if (unused_list->size > size && resue_size > unused_list->size)
 			{
 				resue_size = unused_list->size;
-				reuse_entity = unused_list;
 			}
 		}
 		pre_entity = unused_list;
@@ -285,6 +311,8 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 			reuse_entity->next = root->unuseds->next;
 			root->unuseds = reuse_entity;
 		}
+		//mono_mempool_unused_status(root);
+		//g_print("mono_mempool_unused_fetch size: %d\n", size);
 		return rval;
 	}
 	return NULL;
@@ -327,7 +355,10 @@ mono_mempool_new_size (int initial_size)
 	pool->pos = (guint8*)pool + SIZEOF_MEM_POOL; // Start after header
 	pool->end = (guint8*)pool + initial_size;    // End at end of allocated space 
 	pool->d.allocated = pool->size = initial_size;
+	// extend by dsqiu
 	pool->unuseds = NULL;
+	pool->reusable = FALSE;
+	// extend end
 	UnlockedAdd64 (&total_bytes_allocated, initial_size);
 	return pool;
 }
@@ -672,6 +703,8 @@ mono_mempool_get_bytes_allocated (void)
 mono_bool
 mono_mempool_free(MonoMemPool* pool, void* addr, uint32_t size)
 {
+	if (!pool->reusable)
+		return FALSE;
 	MonoMemPool *p = pool;
 	MonoMemPool *start = NULL;
 	while (p) {
@@ -687,6 +720,11 @@ mono_mempool_free(MonoMemPool* pool, void* addr, uint32_t size)
 	size = ALIGN_SIZE(size);
 	
 	return mono_mempool_unused_insert(pool, addr, size, start);
+	// print status
+	// if(res)
+ 	//	   g_print("mono_mempool_free size: %d\n", size);
+	// mono_mempool_unused_status(pool);
+	// return res;
 }
 
 long
@@ -726,7 +764,14 @@ momo_mempool_profiler(MonoMemPool *pool)
 	g_print("Total mem allocated: %d\n", pool->d.allocated);
 	g_print("Num chunks: %d\n", count);
 	g_print("Free memory: %d\n", still_free);
+	g_print("Real used: %d\n", pool->d.allocated - still_free);
 	g_print("\n");
 	
+}
+
+void
+mono_mempool_set_reusable(MonoMemPool *pool, mono_bool enable)
+{
+	pool->reusable = enable;
 }
 // extend end

@@ -258,6 +258,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 	}
 	else
 	{
+		new_entity->next = root->unuseds->next;
 		root->unuseds = new_entity;
 	}
 	return TRUE;

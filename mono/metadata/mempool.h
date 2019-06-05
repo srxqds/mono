@@ -48,6 +48,8 @@ MONO_API mono_bool
 mono_mempool_free (MonoMemPool *pool, void* addr, uint32_t size);
 MONO_API void
 momo_mempool_profiler(MonoMemPool *pool);
+MONO_API void
+mono_mempool_set_reusable(MonoMemPool *pool, mono_bool enable);
 // extend end
 
 #endif

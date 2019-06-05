@@ -420,6 +420,9 @@ mono_domain_create (void)
 	MONO_PROFILER_RAISE (domain_loading, (domain));
 
 	domain->mp = mono_mempool_new ();
+	// extend by dsqiu
+	mono_mempool_set_reusable(domain->mp, TRUE);
+	// extend end
 	domain->code_mp = mono_code_manager_new ();
 	domain->lock_free_mp = lock_free_mempool_new ();
 	domain->env = mono_g_hash_table_new_type ((GHashFunc)mono_string_hash, (GCompareFunc)mono_string_equal, MONO_HASH_KEY_VALUE_GC, MONO_ROOT_SOURCE_DOMAIN, domain, "Domain Environment Variable Table");
@@ -1418,6 +1421,8 @@ static void code_tracks_foreach(gpointer key, gpointer value, gpointer user_data
 		}
 	}
 }
+
+static int mem_count = 0;
 // extend end
 
 /*
@@ -2122,6 +2127,7 @@ void mono_domain_set_trace(mono_bool enable)
 	trace_enabled = enable;
 	if (!enable)
 	{
+		mem_count = 0;
 		mono_domain_diff_mem_track();
 		mono_domain_clear_mem_track();
 	}
@@ -2138,7 +2144,11 @@ mono_domain_mempool_free(MonoDomain *domain, void* addr, guint size)
 		mono_atomic_fetch_add_i32(&mono_perfcounters->loader_bytes, -size);
 #endif
 	mono_domain_unlock(domain);
-	mono_domain_remove_mem_track(addr, size);
+	if (trace_enabled)
+	{
+		mono_domain_remove_mem_track(addr, size);
+		mem_count -= 1;
+	}
 }
 
 void
@@ -2180,6 +2190,8 @@ mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size)
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
+	if (trace_enabled)
+		g_print("mono_domain_mempool_gc_collect with size %d addr %p\n", size, addr);
 	g_ptr_array_add(mempool_gc_collects, entity);
 }
 
@@ -2189,6 +2201,8 @@ mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size)
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
+	if (trace_enabled)
+		g_print("mono_domain_code_gc_collect with size %d addr %p\n", size, addr);
 	g_ptr_array_add(code_gc_collects, entity);
 }
 
@@ -2254,6 +2268,7 @@ mono_domain_add_unloadable_assembly(MonoDomain* domain, const char* assembly_nam
 	{
 		if (strcmp(assembly_name, (char*)g_ptr_array_index(unloadable_assemblies, i)) == 0)
 			return;
+
 	}
 	char* ass_name = mono_mempool_strdup(domain->mp, assembly_name);
 	g_ptr_array_add(unloadable_assemblies, ass_name);
@@ -2415,7 +2430,7 @@ void mono_domain_profiler(MonoDomain* domain)
 	if (!domain)
 		return;
 	g_print("MonoDomain %p stats:\n", domain);
-	g_print("loader_bytes: %d\n", mono_perfcounters->loader_bytes);
+	g_print("loader_bytes: %d %d\n", mono_perfcounters->loader_bytes, mem_count);
 	momo_mempool_profiler(domain->mp);
 	mono_code_manager_profiler(domain->code_mp);
 	g_print("\n");
@@ -2434,6 +2449,7 @@ mono_domain_alloc_with_trace(MonoDomain* domain, guint size, char *file, char* f
 	mono_domain_unlock(domain);
 	if (trace_enabled)
 	{
+		mem_count += 1;
 		mono_domain_add_mem_track(res, size);
 		g_print("mono_domain_alloc with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
 	}
@@ -2452,6 +2468,7 @@ mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, char *file, char* 
 	mono_domain_unlock(domain);
 	if (trace_enabled)
 	{
+		mem_count += 1;
 		mono_domain_add_mem_track(res, size);
 		g_print("mono_domain_alloc0 with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
 	}
