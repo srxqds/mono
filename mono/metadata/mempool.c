@@ -259,7 +259,8 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 	}
 	else
 	{
-		new_entity->next = root->unuseds->next;
+		if(root->unuseds)
+			new_entity->next = root->unuseds->next;
 		root->unuseds = new_entity;
 	}
 	return TRUE;
@@ -287,6 +288,7 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 			else if (unused_list->size > size && resue_size > unused_list->size)
 			{
 				resue_size = unused_list->size;
+				reuse_entity = unused_list;
 			}
 		}
 		pre_entity = unused_list;
@@ -550,7 +552,7 @@ gpointer
 			guint new_size = get_next_size (pool, size);
 			MonoMemPool *np = (MonoMemPool *)g_malloc (new_size);
 			// extend by dsqiu
-			if (pool->pos < pool->end)
+			if (pool->reusable && pool->pos < pool->end)
 			{
 				mono_mempool_free(pool, pool->pos, pool->end - pool->pos);
 			}

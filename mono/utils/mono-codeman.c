@@ -319,7 +319,7 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 			{
 				guint32 left_size = rval - reuse_entity->pos;
 				guint32 right_size = reuse_entity->size - left_size - size;
-				unused_list->size = left_size;
+				reuse_entity->size = left_size;
 				mono_code_unused_insert(root, rval + size, right_size, mono_code_chunk_find(root, reuse_entity->pos));
 			}
 		}
