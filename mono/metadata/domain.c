@@ -2412,7 +2412,7 @@ void mono_domain_code_track_clear(MonoDomain* domain, MonoAssembly* assembly)
 
 void mono_domain_profiler(MonoDomain* domain)
 {
-	if (!domain || trace_enabled)
+	if (!domain)
 		return;
 	g_print("MonoDomain %p stats:\n", domain);
 	g_print("loader_bytes: %d\n", mono_perfcounters->loader_bytes);
