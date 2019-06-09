@@ -2148,8 +2148,8 @@ mono_domain_mempool_free(MonoDomain *domain, void* addr, guint size)
 	{
 		mono_domain_remove_mem_track(addr, size);
 		mem_count -= 1;
-		if (!res)
-			g_print("mono_domain_mempool_free error with size %d addr %p", size, addr);
+		/*if (!res)
+			g_print("mono_domain_mempool_free error with size %d addr %p", size, addr);*/
 	}
 }
 

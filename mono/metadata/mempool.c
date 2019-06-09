@@ -175,13 +175,13 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 		root->unuseds->size = size;
 		return TRUE;
 	}
-	gpointer pool_end = (gpointer)((guint8*)pool + pool->size);
-	gpointer pool_start = (gpointer)(pool);
+	guint8* pool_end = (guint8*)pool + pool->size;
+	guint8* pool_start = (guint8*)pool +SIZEOF_MEM_POOL;
 	MonoUnusedEntity* unused_list = root->unuseds;
 	// check if has adjacent entity, join
 	while (unused_list)
 	{
-		gpointer pre_addr = (gpointer)unused_list->pos;
+		guint8* pre_addr = unused_list->pos;
 		if (pre_addr >= pool_start && pre_addr < pool_end)
 		{
 			if (addr == unused_list->pos)
@@ -189,8 +189,6 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 				g_print("Free memory repeatly\n");
 				return FALSE;
 			}
-			// guint8* a = (guint8*)unused_list + unused_list->size;
-			// guint8* b = addr + size;
 			if (unused_list->pos + unused_list->size == addr)
 			{
 				unused_list->size += size;
@@ -230,11 +228,11 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 	// sort insert 
 	while (unused_list)
 	{
-		gpointer pre_addr = (gpointer)unused_list->pos;
+		guint8* pre_addr = unused_list->pos;
 		if (pre_addr >= pool_start && pre_addr < pool_end)
 		{
 			has_same_pool = TRUE;
-			if (pre_addr > (gpointer)addr)
+			if (pre_addr > addr)
 			{
 				break;
 			}
@@ -274,7 +272,7 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 	if (!root->reusable)
 		return NULL;
 	MonoUnusedEntity* unused_list = root->unuseds;
-	MonoUnusedEntity* pre_entity = NULL;
+	// MonoUnusedEntity* pre_entity = NULL;
 	MonoUnusedEntity* reuse_entity = NULL;
 	guint32 resue_size = MONO_MEMPOOL_PREFER_INDIVIDUAL_ALLOCATION_SIZE + 1;
 	while (unused_list)
@@ -292,7 +290,7 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 				reuse_entity = unused_list;
 			}
 		}
-		pre_entity = unused_list;
+		// pre_entity = unused_list;
 		unused_list = unused_list->next;
 	}
 	if (reuse_entity)
@@ -305,14 +303,17 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 		}
 		else  // remove from list and insert header
 		{
-			if (pre_entity)
+			mono_mempool_unused_recycle(root, reuse_entity);
+			/*if (pre_entity)
 			{
 				pre_entity->next = reuse_entity->next;
 			}
 			reuse_entity->pos = NULL;
 			reuse_entity->size = 0;
-			reuse_entity->next = root->unuseds->next;
-			root->unuseds = reuse_entity;
+			reuse_entity->next = NULL;
+			if(root->unuseds)
+				reuse_entity->next = root->unuseds->next;
+			root->unuseds = reuse_entity;*/
 		}
 		//mono_mempool_unused_status(root);
 		//g_print("mono_mempool_unused_fetch size: %d\n", size);
@@ -582,28 +583,9 @@ gpointer
 gpointer
 (mono_mempool_alloc0) (MonoMemPool *pool, guint size)
 {
-	gpointer rval;
-
-	// For the fast path, repeat the first few lines of mono_mempool_alloc
-	size = ALIGN_SIZE (size);
-	rval = pool->pos;
-	pool->pos = (guint8*)rval + size;
-
-	// If that doesn't work fall back on mono_mempool_alloc to handle new chunk allocation
-	if (G_UNLIKELY (pool->pos >= pool->end)) {
-		// extend by dsqiu
-		// bug?
-		pool->pos -= size; // Back out
-		// extend end
-		rval = mono_mempool_alloc (pool, size);
-	}
-#ifdef TRACE_ALLOCATIONS
-	else if (pool == mono_get_corlib ()->mempool) {
-		mono_backtrace (size);
-	}
-#endif
-
-	memset (rval, 0, size);
+	const gpointer rval = mono_mempool_alloc(pool, size);
+	if (rval)
+		memset(rval, 0, size);
 	return rval;
 }
 
@@ -711,7 +693,7 @@ mono_mempool_free(MonoMemPool* pool, void* addr, uint32_t size)
 	MonoMemPool *p = pool;
 	MonoMemPool *start = NULL;
 	while (p) {
-		if (addr >= (gpointer)p && addr < (gpointer)((guint8*)p + p->size))
+		if (addr >= (gpointer)((guint8*)pool + SIZEOF_MEM_POOL) && addr < (gpointer)((guint8*)p + p->size))
 		{
 			start = p;
 			break;

@@ -5270,6 +5270,8 @@ runtime_invoke_hash_foreach_remove(gpointer key, gpointer value, gpointer user_d
 		// remove invoke_method
 		mono_domain_remove_jit_info_for_method(data->domain, info->invoke_method);
 		// todo remove compile_method
+		// remove from jit_code_hash
+		mono_internal_hash_table_remove(&data->domain->jit_code_hash, info->invoke_method);
 		runtime_invoke_info_free(value);
 		return TRUE;
 	}

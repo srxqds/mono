@@ -3165,7 +3165,6 @@ mono_domain_jit_code_hash_remove(gpointer key, gpointer value, gpointer user_dat
 	MonoMethod* method = (MonoMethod*)key;
 	if (method->klass && method->klass->image == image)
 	{
-		g_print("-------------------------->%p\n", method);
 		return TRUE;
 	}
 	return FALSE;

@@ -181,6 +181,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 	// check if has adjacent entity, join
 	while (unused_list)
 	{
+		break;
 		gpointer pre_addr = (gpointer)unused_list->pos;
 		if (pre_addr >= pool_start && pre_addr < pool_end)
 		{
