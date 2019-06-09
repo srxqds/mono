@@ -40,6 +40,8 @@ MONO_API mono_bool
 mono_code_chunk_free(MonoCodeManager* cman, void* addr, int size);
 MONO_API void
 mono_code_manager_profiler(MonoCodeManager* cman);
+MONO_API void
+mono_code_set_reusable(MonoCodeManager *pool, mono_bool enable);
 // extend end
 
 #endif /* __MONO_CODEMAN_H__ */

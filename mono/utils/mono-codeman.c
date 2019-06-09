@@ -100,10 +100,21 @@ struct _MonoCodeManager {
 	// extend by dsqiu
 	// empty->empty->unused_memory->unused_memory
 	MonoUnusedEntity* unuseds;
+	mono_bool reusable;
 	// extend end
 };
 
+#define ALIGN_INT(val,alignment) (((val) + (alignment - 1)) & ~(alignment - 1))
+
+#define VALLOC_FREELIST_SIZE 16
+
 // extend by dsqiu
+
+void
+mono_code_set_reusable(MonoCodeManager *pool, mono_bool enable)
+{
+	pool->reusable = enable;
+}
 
 static void
 mono_code_unused_status(MonoCodeManager* pool)
@@ -190,6 +201,8 @@ mono_code_unused_recycle(MonoCodeManager* root, MonoUnusedEntity* reuse_entity)
 static gboolean
 mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChunk* chunk)
 {
+	if (!root->reusable)
+		return FALSE;
 	MonoUnusedEntity* new_entity = NULL;
 	if (!root->unuseds)
 	{
@@ -198,6 +211,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 		root->unuseds->size = size;
 		return TRUE;
 	}
+	g_print("mono_code_unused_insert size: %d\n", size);
 	char* pool_end = chunk->data + chunk->size;
 	char* pool_start = chunk->data;
 	MonoUnusedEntity* unused_list = root->unuseds;
@@ -291,6 +305,8 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 static gpointer
 mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 {
+	if (!root->reusable)
+		return NULL;
 	MonoUnusedEntity* unused_list = root->unuseds;
 	MonoUnusedEntity* reuse_entity = NULL;
 	// max number
@@ -301,7 +317,14 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 	{
 		if (unused_list->pos)
 		{
+			CodeChunk* chunk = mono_code_chunk_find(root, unused_list->pos);
+			guint32 pos = ALIGN_INT(unused_list->pos - chunk->data, alignment);
+			char* ptr1 = (void*)((((uintptr_t)chunk->data + align_mask) & ~(uintptr_t)align_mask) + pos);
 			char* ptr = (char*)(((uintptr_t)unused_list->pos + align_mask) & ~(uintptr_t)align_mask);
+			if (ptr1 != ptr)
+			{
+				int a = 1;
+			}
 			if (ptr + size <= unused_list->pos + unused_list->size)
 			{
 				if (ptr == unused_list->pos && unused_list->size == size)
@@ -357,9 +380,6 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 // extend end
 
 
-#define ALIGN_INT(val,alignment) (((val) + (alignment - 1)) & ~(alignment - 1))
-
-#define VALLOC_FREELIST_SIZE 16
 
 static mono_mutex_t valloc_mutex;
 static GHashTable *valloc_freelists;
@@ -468,6 +488,7 @@ mono_code_manager_new (void)
 	// extend by dsqiu
 	MonoCodeManager * value = (MonoCodeManager *)g_malloc0(sizeof(MonoCodeManager));
 	value->unuseds = NULL;
+	value->reusable = FALSE;
 	return value;
 	// extend end
 	//return (MonoCodeManager *) g_malloc0 (sizeof (MonoCodeManager));
@@ -761,7 +782,7 @@ void*
 			}
 			chunk->pos = ((char*)ptr - chunk->data) + size;
 			// extend by dsqiu
-			if (last_pos != ptr)
+			if (cman->reusable && last_pos != ptr)
 			{
 				mono_code_unused_insert(cman, last_pos, (char*)ptr - last_pos, chunk);
 			}
@@ -808,7 +829,7 @@ void*
 	ptr = (void*)((((uintptr_t)chunk->data + align_mask) & ~(uintptr_t)align_mask) + chunk->pos);
 	chunk->pos = ((char*)ptr - chunk->data) + size;
 	// extend by dsqiu
-	if (last_pos != ptr)
+	if (cman->reusable && last_pos != ptr)
 	{
 		mono_code_unused_insert(cman, last_pos, (char*)ptr - last_pos, chunk);
 	}
@@ -884,6 +905,8 @@ mono_code_manager_size (MonoCodeManager *cman, int *used_size)
 mono_bool
 mono_code_chunk_free(MonoCodeManager* cman, void* addr, int size)
 {
+	if (!cman->reusable)
+		return FALSE;
 	CodeChunk* chunk = mono_code_chunk_find(cman, addr);
 	if(!chunk)
 		return FALSE;

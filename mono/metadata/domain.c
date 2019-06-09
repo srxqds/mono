@@ -420,10 +420,11 @@ mono_domain_create (void)
 	MONO_PROFILER_RAISE (domain_loading, (domain));
 
 	domain->mp = mono_mempool_new ();
+	domain->code_mp = mono_code_manager_new ();
 	// extend by dsqiu
 	mono_mempool_set_reusable(domain->mp, TRUE);
+	mono_code_set_reusable(domain->code_mp, TRUE);
 	// extend end
-	domain->code_mp = mono_code_manager_new ();
 	domain->lock_free_mp = lock_free_mempool_new ();
 	domain->env = mono_g_hash_table_new_type ((GHashFunc)mono_string_hash, (GCompareFunc)mono_string_equal, MONO_HASH_KEY_VALUE_GC, MONO_ROOT_SOURCE_DOMAIN, domain, "Domain Environment Variable Table");
 	domain->domain_assemblies = NULL;
