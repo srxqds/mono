@@ -136,7 +136,8 @@ mono_mempool_unused_recycle(MonoMemPool* root, MonoUnusedEntity* reuse_entity)
 		}
 		unused_list = unused_list->next;
 	}
-	reuse_entity->next = root->unuseds->next;
+	if(root->unuseds)
+		reuse_entity->next = root->unuseds->next;
 	root->unuseds = reuse_entity;
 }
 
@@ -180,7 +181,7 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 	// check if has adjacent entity, join
 	while (unused_list)
 	{
-		gpointer pre_addr = (gpointer)unused_list;
+		gpointer pre_addr = (gpointer)unused_list->pos;
 		if (pre_addr >= pool_start && pre_addr < pool_end)
 		{
 			if (addr == unused_list->pos)
