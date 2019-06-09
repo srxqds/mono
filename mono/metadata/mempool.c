@@ -136,15 +136,14 @@ mono_mempool_unused_recycle(MonoMemPool* root, MonoUnusedEntity* reuse_entity)
 		}
 		unused_list = unused_list->next;
 	}
-	if(root->unuseds)
-		reuse_entity->next = root->unuseds->next;
+	reuse_entity->next = root->unuseds;
 	root->unuseds = reuse_entity;
 }
 
 static void
 mono_mempool_unused_status(MonoMemPool* pool)
 {
-	if (!pool || !pool->unuseds)
+	if (!pool || !pool->reusable)
 		return;
 	// print status
 	int count = 0;
@@ -155,7 +154,7 @@ mono_mempool_unused_status(MonoMemPool* pool)
 	while (unuseds)
 	{
 		still_free += unuseds->size;
-		if (!unuseds->size)
+		if (unuseds->size == 0)
 			empty_count += 1;
 		count += 1;
 		unuseds = unuseds->next;
@@ -258,8 +257,7 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 	}
 	else
 	{
-		if(root->unuseds)
-			new_entity->next = root->unuseds->next;
+		new_entity->next = root->unuseds;
 		root->unuseds = new_entity;
 	}
 	return TRUE;
@@ -315,8 +313,9 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 				reuse_entity->next = root->unuseds->next;
 			root->unuseds = reuse_entity;*/
 		}
-		//mono_mempool_unused_status(root);
-		//g_print("mono_mempool_unused_fetch size: %d\n", size);
+		// g_print("mono_mempool_unused_fetch size: %d\n", size);
+		// mono_mempool_unused_status(root);
+		
 		return rval;
 	}
 	return NULL;
@@ -706,10 +705,11 @@ mono_mempool_free(MonoMemPool* pool, void* addr, uint32_t size)
 	
 	return mono_mempool_unused_insert(pool, addr, size, start);
 	// print status
-	// if(res)
- 	//	   g_print("mono_mempool_free size: %d\n", size);
-	// mono_mempool_unused_status(pool);
-	// return res;
+	/*mono_bool res = mono_mempool_unused_insert(pool, addr, size, start);
+	 if(res)
+ 		   g_print("mono_mempool_free size: %d\n", size);
+	mono_mempool_unused_status(pool);
+	return res;*/
 }
 
 long

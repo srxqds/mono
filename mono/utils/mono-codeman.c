@@ -158,8 +158,7 @@ mono_code_unused_recycle(MonoCodeManager* root, MonoUnusedEntity* reuse_entity)
 		}
 		unused_list = unused_list->next;
 	}
-	if(root->unuseds)
-		reuse_entity->next = root->unuseds->next;
+	reuse_entity->next = root->unuseds;
 	root->unuseds = reuse_entity;
 }
 
@@ -260,7 +259,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 	}
 	else
 	{
-		new_entity->next = root->unuseds->next;
+		new_entity->next = root->unuseds;
 		root->unuseds = new_entity;
 	}
 	return TRUE;
@@ -308,7 +307,7 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 			}
 			reuse_entity->pos = NULL;
 			reuse_entity->size = 0;
-			reuse_entity->next = root->unuseds->next;
+			reuse_entity->next = root->unuseds;
 			root->unuseds = reuse_entity;
 		}
 		else
