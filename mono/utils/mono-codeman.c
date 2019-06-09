@@ -104,6 +104,30 @@ struct _MonoCodeManager {
 };
 
 // extend by dsqiu
+
+static void
+mono_code_unused_status(MonoCodeManager* pool)
+{
+	if (!pool)
+		return;
+	// print status
+	int count = 0;
+	guint32 still_free = 0;
+	int empty_count = 0;
+
+	MonoUnusedEntity* unuseds = pool->unuseds;
+	while (unuseds)
+	{
+		still_free += unuseds->size;
+		if (unuseds->size == 0)
+			empty_count += 1;
+		count += 1;
+		unuseds = unuseds->next;
+
+	}
+	g_print("mono_code_unused_status count: %d, empty: %d, size: %d\n", count, empty_count, still_free);
+}
+
 static CodeChunk* mono_code_chunk_find(MonoCodeManager* cman, char* addr)
 {	
 	CodeChunk* chunk = NULL;
@@ -180,7 +204,6 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 	// check if has adjacent entity, join
 	while (unused_list)
 	{
-		break;
 		char* pre_addr = unused_list->pos;
 		if (pre_addr >= pool_start && pre_addr < pool_end)
 		{
@@ -189,8 +212,6 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 				g_print("Free code repeatly\n");
 				return FALSE;
 			}
-			// guint8* a = (guint8*)unused_list + unused_list->size;
-			// guint8* b = addr + size;
 			if (unused_list->pos + unused_list->size == addr)
 			{
 				unused_list->size += size;
@@ -199,7 +220,9 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 				if (next_entity && next_entity->pos >= pool_start && next_entity->pos < pool_end && (next_entity->pos == unused_list->pos + unused_list->size))
 				{
 					unused_list->size += next_entity->size;
+					// mono_code_unused_status(root);
 					mono_code_unused_recycle(root, next_entity);
+					// mono_code_unused_status(root);
 				}
 				return TRUE;
 			}
@@ -273,6 +296,7 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 	// max number
 	guint32 resue_size = (1 << (8* sizeof(guint32))) - 1;
 	guint32 align_mask = alignment - 1;
+	mono_code_unused_status(root);
 	while (unused_list)
 	{
 		if (unused_list->pos)
@@ -311,10 +335,20 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 			{
 				guint32 left_size = rval - reuse_entity->pos;
 				guint32 right_size = reuse_entity->size - left_size - size;
-				reuse_entity->size = left_size;
-				mono_code_unused_insert(root, rval + size, right_size, mono_code_chunk_find(root, reuse_entity->pos));
+				if (left_size != 0)
+				{
+					reuse_entity->size = left_size;
+					mono_code_unused_insert(root, rval + size, right_size, mono_code_chunk_find(root, reuse_entity->pos));
+				}
+				else
+				{
+					reuse_entity->size = right_size;
+					reuse_entity->pos = rval + size;
+				}
 			}
 		}
+		g_print("--------------->mono_code_unused_fetch size: %d\n", size);
+		mono_code_unused_status(root);
 		return rval;
 	}
 	return NULL;
@@ -708,6 +742,10 @@ void*
 	}
 
 	for (chunk = cman->current; chunk; chunk = chunk->next) {
+		// extend by dsqiu
+		// char* ptr = (char*)(((uintptr_t)chunk->pos + align_mask) & ~(uintptr_t)align_mask);
+		// if (ptr + size <= chunk->pos + chunk->size) {
+		// extend end
 		if (ALIGN_INT (chunk->pos, alignment) + size <= chunk->size) {
 			// extend by dsqiu
 			char* last_pos = chunk->data + chunk->pos;
@@ -716,6 +754,11 @@ void*
 			/* Align the chunk->data we add to chunk->pos */
 			/* or we can't guarantee proper alignment     */
 			ptr = (void*)((((uintptr_t)chunk->data + align_mask) & ~(uintptr_t)align_mask) + chunk->pos);
+			if (ptr != chunk->data + chunk->pos)
+			{
+				int a = (char*)ptr - chunk->data - chunk->pos;
+				int c = a;
+			}
 			chunk->pos = ((char*)ptr - chunk->data) + size;
 			// extend by dsqiu
 			if (last_pos != ptr)
@@ -844,7 +887,11 @@ mono_code_chunk_free(MonoCodeManager* cman, void* addr, int size)
 	CodeChunk* chunk = mono_code_chunk_find(cman, addr);
 	if(!chunk)
 		return FALSE;
-	return mono_code_unused_insert(cman, addr, size, chunk);
+	// return mono_code_unused_insert(cman, addr, size, chunk);
+	mono_bool res = mono_code_unused_insert(cman, addr, size, chunk);
+	g_print("---------------->mono_code_chunk_free size: %d\n", size);
+	mono_code_unused_status(cman);
+	return res;
 }
 
 void mono_code_manager_profiler(MonoCodeManager* cman)

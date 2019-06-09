@@ -2205,6 +2205,16 @@ mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size)
 	entity->size = size;
 	if (trace_enabled)
 		g_print("mono_domain_code_gc_collect with size %d addr %p\n", size, addr);
+
+	//int i;
+	//for (i = 0; i < code_gc_collects->len; i++)
+	//{
+	//	_GCEntity* value = (_GCEntity*)g_ptr_array_index(code_gc_collects, i);
+	//	if (value->addr == addr)
+	//	{
+	//		int a = 1;
+	//	}
+	//}
 	g_ptr_array_add(code_gc_collects, entity);
 }
 
@@ -2342,15 +2352,16 @@ static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t s
 		array = g_ptr_array_new();
 		g_hash_table_insert(domain_code_tracks, klass, array);
 	}
+
 	_GCEntity* entity = mono_domain_alloc0(mono_domain_get(), sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
+	
 	g_ptr_array_add(array, entity);
 }
 
 void mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size)
 {
-	return;
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
 	mono_domain_add_mempool_tracks(method->klass, addr, size);
