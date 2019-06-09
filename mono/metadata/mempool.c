@@ -196,7 +196,7 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 				unused_list->size += size;
 				// check next entity if adjacent
 				MonoUnusedEntity* next_entity = unused_list->next;
-				if (next_entity && ((guint8*)(next_entity->pos) == (guint8*)(unused_list->pos) + unused_list->size))
+				if (next_entity && next_entity->pos >= pool_start && next_entity->pos < pool_end && ((guint8*)(next_entity->pos) == (guint8*)(unused_list->pos) + unused_list->size))
 				{
 					unused_list->size += next_entity->size;
 					mono_mempool_unused_recycle(root, next_entity);

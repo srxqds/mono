@@ -196,7 +196,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 				unused_list->size += size;
 				// check next entity if adjacent
 				MonoUnusedEntity* next_entity = unused_list->next;
-				if (next_entity && (next_entity->pos == unused_list->pos + unused_list->size))
+				if (next_entity && next_entity->pos >= pool_start && next_entity->pos < pool_end && (next_entity->pos == unused_list->pos + unused_list->size))
 				{
 					unused_list->size += next_entity->size;
 					mono_code_unused_recycle(root, next_entity);
