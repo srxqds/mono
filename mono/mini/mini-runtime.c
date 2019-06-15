@@ -3628,6 +3628,11 @@ no_vcall_trampoline (void)
 static gpointer *vtable_trampolines;
 static int vtable_trampolines_size;
 
+// extend by dsqiu
+// 虽然好像不会出现
+static GHashTable* vtable_trampolines_hash = NULL;
+// extend end
+
 gpointer
 mini_get_vtable_trampoline (MonoVTable *vt, int slot_index)
 {
@@ -3681,6 +3686,11 @@ mini_get_vtable_trampoline (MonoVTable *vt, int slot_index)
 		// NOTIC by dsqiu
 		// todo:不同的分支返回值都要检查下
 		mono_domain_vtable_code_track(vt, vtable_trampolines[index], code_size);
+		if (!vtable_trampolines_hash)
+		{
+			vtable_trampolines_hash = g_hash_table_new(NULL, NULL);
+		}
+		g_hash_table_insert(vtable_trampolines_hash, vtable_trampolines[index], vt);
 		// extend end
 	}
 	return vtable_trampolines [index];
@@ -5309,6 +5319,27 @@ jump_target_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data
 	return FALSE;
 }
 
+
+static gboolean
+vtable_trampolines_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoVTable* vt = (MonoVTable*)value;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (vt->klass->image == image)
+	{
+		int i;
+		for (i = 0; i < vtable_trampolines_size; i++)
+		{
+			if (vtable_trampolines[i] == key)
+			{
+				vtable_trampolines[i] = NULL;
+			}
+		}
+		return TRUE;
+	}
+	return FALSE;
+}
 void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
 {
 	MonoImage* image = assembly->image;
@@ -5317,8 +5348,8 @@ void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoA
 	user_data.domain = domain;
 	MonoJitDomainInfo *info = domain_jit_info(domain);
 
-//	g_hash_table_foreach(info->jump_target_hash, delete_jump_list, NULL);
-//	g_hash_table_destroy(info->jump_target_hash);
+	//	g_hash_table_foreach(info->jump_target_hash, delete_jump_list, NULL);
+	//	g_hash_table_destroy(info->jump_target_hash);
 	if (info->jump_target_hash)
 	{
 		g_hash_table_foreach_remove(info->jump_target_hash, jump_target_hash_foreach_remove, &user_data);
@@ -5340,7 +5371,7 @@ void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoA
 	{
 		g_hash_table_foreach_remove(info->jump_trampoline_hash, mono_method_key_foreach_remove, &user_data);
 	}
-//	g_hash_table_destroy(info->jit_trampoline_hash);
+	//	g_hash_table_destroy(info->jit_trampoline_hash);
 	if (info->jit_trampoline_hash)
 	{
 		// todo: remove code
@@ -5381,10 +5412,13 @@ void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoA
 //		g_hash_table_foreach(info->llvm_jit_callees, free_jit_callee_list, NULL);
 //		g_hash_table_destroy(info->llvm_jit_callees);
 //	}
-	
+
 //#ifdef ENABLE_LLVM
 //	mono_llvm_free_domain_info(domain);
 //#endif
-
+	if (vtable_trampolines_hash)
+	{
+		g_hash_table_foreach_remove(vtable_trampolines_hash, vtable_trampolines_hash_foreach_remove, &user_data);
+	}
 }
 // extend end
