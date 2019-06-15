@@ -185,7 +185,7 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 		{
 			if (addr == unused_list->pos)
 			{
-				g_print("Free memory repeatly\n");
+				g_print("Free memory repeatly addr: %p\n", addr);
 				return FALSE;
 			}
 			if (unused_list->pos + unused_list->size == addr)

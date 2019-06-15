@@ -211,7 +211,6 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 		root->unuseds->size = size;
 		return TRUE;
 	}
-	g_print("mono_code_unused_insert size: %d\n", size);
 	char* pool_end = chunk->data + chunk->size;
 	char* pool_start = chunk->data;
 	MonoUnusedEntity* unused_list = root->unuseds;
@@ -223,7 +222,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 		{
 			if (addr == unused_list->pos)
 			{
-				g_print("Free code repeatly\n");
+				g_print("Free code repeatly addr: %p\n", addr);
 				return FALSE;
 			}
 			if (unused_list->pos + unused_list->size == addr)
