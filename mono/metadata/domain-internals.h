@@ -622,14 +622,18 @@ MONO_API void mono_assembly_cleanup_domain_binding_for_unused_assembly(MonoDomai
 void mono_reflection_cleanup_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_jit_info_table_cleanup_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_free(MonoDomain *domain, void* addr, guint size);
-MONO_API void mono_domain_strdup_collect(MonoDomain* domain, const char* str);
+void mono_domain_strdup_collect(MonoDomain* domain, const char* str, char *file, char* function, int line);
 MONO_API void mono_domain_code_free(MonoDomain* domain, void* addr, guint size);
 MONO_API void mono_domain_code_gc_init(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_gc_init(MonoDomain* domain, MonoAssembly* assembly);
-MONO_API void mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size);
-MONO_API void mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size);
+void mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size, char *file, char* function, int line);
+void mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size, char *file, char* function, int line);
 MONO_API void mono_domain_code_gc_clear(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_gc_clear(MonoDomain* domain, MonoAssembly* assembly);
+
+#define mono_domain_code_gc_collect(domain, addr, size) (mono_domain_code_gc_collect ((domain), (addr), (size), __FILE__, __func__, __LINE__))
+#define mono_domain_mempool_gc_collect(domain, addr, size) (mono_domain_mempool_gc_collect ((domain), (addr), (size), __FILE__, __func__, __LINE__))
+#define mono_domain_strdup_collect(domain,str) (mono_domain_strdup_collect ((domain), (str), __FILE__, __func__, __LINE__))
 
 void mono_domain_remove_jit_info_for_method(MonoDomain* domain, MonoMethod* method);
 

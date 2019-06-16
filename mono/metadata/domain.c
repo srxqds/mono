@@ -2091,6 +2091,11 @@ mono_domain_remove_mem_track(gpointer addr, guint size)
 	for (i = 0; i < mem_addr_size_tracks->len; i++)
 	{
 		_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
+		if (value->addr == addr && value->size != size)
+		{
+			g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
+			g_assert_not_reached();
+		}
 		if (value->addr == addr && value->size == size)
 		{
 			g_free(value);
@@ -2098,6 +2103,7 @@ mono_domain_remove_mem_track(gpointer addr, guint size)
 			break;
 		}
 	}
+	g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
 	g_assert_not_reached();
 }
 
@@ -2190,44 +2196,38 @@ mono_domain_code_gc_init(MonoDomain* domain, MonoAssembly* assembly)
 }
 
 void
-mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size)
+(mono_domain_mempool_gc_collect) (MonoDomain* domain, void* addr, guint size, char *file, char* function, int line)
 {
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
 	if (trace_enabled & MEMPOOL_TRACE)
-		g_print("mono_domain_mempool_gc_collect with size %d addr %p\n", size, addr);
+		g_print("mono_domain_mempool_gc_collect with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 	g_ptr_array_add(mempool_gc_collects, entity);
 }
 
 void
-mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size)
+(mono_domain_code_gc_collect)(MonoDomain* domain, void* addr, guint size, char *file, char* function, int line)
 {
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
 	if (trace_enabled & CODE_TRACE)
-		g_print("mono_domain_code_gc_collect with size %d addr %p\n", size, addr);
+		g_print("mono_domain_code_gc_collect with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 
-	//int i;
-	//for (i = 0; i < code_gc_collects->len; i++)
-	//{
-	//	_GCEntity* value = (_GCEntity*)g_ptr_array_index(code_gc_collects, i);
-	//	if (value->addr == addr)
-	//	{
-	//		int a = 1;
-	//	}
-	//}
 	g_ptr_array_add(code_gc_collects, entity);
 }
 
-void mono_domain_strdup_collect(MonoDomain* domain, const char* str)
+void 
+(mono_domain_strdup_collect)(MonoDomain* domain, const char* str, char *file, char* function, int line)
 {
 	if (!str)
 		return;
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = str;
 	entity->size = strlen(str) + 1;
+	if (trace_enabled & MEMPOOL_TRACE)
+		g_print("mono_domain_strdup_collect with size %d addr %p. at file %s, line %d, function %s\n", entity->size, entity->addr, file, line, function);
 	g_ptr_array_add(mempool_gc_collects, entity);
 }
 
@@ -2323,8 +2323,7 @@ mono_domain_contain_unloadable_assembly(const char* assembly_name)
 	return FALSE;
 }
 
-
-static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_t size)
+static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_t size, char *file, char* function, int line)
 {
 	if (!domain_mempool_tracks)
 	{
@@ -2339,11 +2338,13 @@ static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_
 	_GCEntity* entity = mono_domain_alloc0(mono_domain_get(), sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
+	if (trace_enabled & MEMPOOL_TRACE)
+		g_print("mono_domain_add_mempool_tracks with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 	g_ptr_array_add(array, entity);
 
 }
 
-static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t size)
+static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t size, char *file, char* function, int line)
 {
 	if (!domain_code_tracks)
 	{
@@ -2359,36 +2360,37 @@ static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t s
 	_GCEntity* entity = mono_domain_alloc0(mono_domain_get(), sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
-	
+	if (trace_enabled & CODE_TRACE)
+		g_print("mono_domain_add_code_tracks with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 	g_ptr_array_add(array, entity);
 }
 
-void mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size)
+void (mono_domain_method_mempool_track)(MonoMethod* method, void* addr, uint32_t size, char *file, char* function, int line)
 {
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
-	mono_domain_add_mempool_tracks(method->klass, addr, size);
+	mono_domain_add_mempool_tracks(method->klass, addr, size, file, function, line);
 }
 
-void mono_domain_method_code_track(MonoMethod* method, void* addr, uint32_t size)
+void (mono_domain_method_code_track)(MonoMethod* method, void* addr, uint32_t size, char *file, char* function, int line)
 {
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
-	mono_domain_add_code_tracks(method->klass, addr, size);
+	mono_domain_add_code_tracks(method->klass, addr, size, file, function, line);
 }
 
-void mono_domain_vtable_mempool_track(MonoVTable* vtable, void* addr, uint32_t size)
+void (mono_domain_vtable_mempool_track)(MonoVTable* vtable, void* addr, uint32_t size, char *file, char* function, int line)
 {
 	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
-	mono_domain_add_mempool_tracks(vtable->klass, addr, size);
+	mono_domain_add_mempool_tracks(vtable->klass, addr, size, file, function, line);
 }
 
-void mono_domain_vtable_code_track(MonoVTable* vtable, void* addr, uint32_t size)
+void (mono_domain_vtable_code_track)(MonoVTable* vtable, void* addr, uint32_t size, char *file, char* function, int line)
 {
 	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
-	mono_domain_add_code_tracks(vtable->klass, addr, size);
+	mono_domain_add_code_tracks(vtable->klass, addr, size, file, function, line);
 }
 
 static gboolean

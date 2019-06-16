@@ -239,17 +239,22 @@ mono_domain_add_unloadable_assembly(MonoDomain* domain, const char* assembly_nam
 MONO_API void
 mono_domain_remove_unloadable_assembly(MonoDomain* domain, const char* assembly_name);
 void 
-mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size);
+mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size, char *file, char* function, int line);
 void 
-mono_domain_method_code_track(MonoMethod* method, void* addr, uint32_t size);
+mono_domain_method_code_track(MonoMethod* method, void* addr, uint32_t size, char *file, char* function, int line);
 void
-mono_domain_vtable_mempool_track(MonoVTable* vtable, void* addr, uint32_t size);
+mono_domain_vtable_mempool_track(MonoVTable* vtable, void* addr, uint32_t size, char *file, char* function, int line);
 void
-mono_domain_vtable_code_track(MonoVTable* vtable, void* addr, uint32_t size);
+mono_domain_vtable_code_track(MonoVTable* vtable, void* addr, uint32_t size, char *file, char* function, int line);
 void
 mono_domain_mempool_track_clear(MonoDomain* domain, MonoAssembly* assembly);
 void
 mono_domain_code_track_clear(MonoDomain* domain, MonoAssembly* assembly);
+
+#define mono_domain_method_mempool_track(method, addr, size) (mono_domain_method_mempool_track((method), (addr), (size), __FILE__, __func__, __LINE__));
+#define mono_domain_method_code_track(method, addr, size) (mono_domain_method_code_track((method), (addr), (size), __FILE__, __func__, __LINE__));
+#define mono_domain_vtable_mempool_track(vtable, addr, size) (mono_domain_vtable_mempool_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
+#define mono_domain_vtable_code_track(vtable, addr, size) (mono_domain_vtable_code_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
 
 void mono_object_remove_gerneric_virtual_case_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);

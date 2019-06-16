@@ -5232,7 +5232,6 @@ delegate_trampoline_hash_foreach_remove(gpointer key, gpointer value, gpointer u
 	MonoImage* image = data->assembly->image;
 	if (pair->klass->image == image || (pair->method && pair->method->klass->image == image))
 	{
-		mono_domain_code_free(data->domain, tramp_info->code_start, tramp_info->code_size);
 		mono_domain_code_gc_collect(data->domain, tramp_info->code_start, tramp_info->code_size);
 		mono_domain_mempool_gc_collect(data->domain, pair, sizeof(MonoClassMethodPair));
 		mono_domain_mempool_gc_collect(data->domain, tramp_info, sizeof(MonoDelegateTrampInfo));
