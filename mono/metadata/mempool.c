@@ -183,7 +183,7 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 		guint8* pre_addr = unused_list->pos;
 		if (pre_addr >= pool_start && pre_addr < pool_end)
 		{
-			if (addr == unused_list->pos)
+			if (addr == pre_addr || (pre_addr < addr && pre_addr + unused_list->size > addr))
 			{
 				g_print("Free memory repeatly addr: %p\n", addr);
 				return FALSE;
@@ -222,32 +222,16 @@ mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMem
 	new_entity->size = size;
 	new_entity->pos = addr;
 	unused_list = root->unuseds;
-	gboolean has_same_pool = FALSE;
 	MonoUnusedEntity* pre_entity = NULL;
 	// sort insert 
 	while (unused_list)
 	{
 		guint8* pre_addr = unused_list->pos;
-		if (pre_addr >= pool_start && pre_addr < pool_end)
-		{
-			has_same_pool = TRUE;
-			if (pre_addr > addr)
-			{
-				break;
-			}
-			else
-			{
-				pre_entity = unused_list;
-			}
-		}
-		else if (has_same_pool)
+		if (pre_addr > addr)
 		{
 			break;
 		}
-		else // last
-		{
-			pre_entity = unused_list;
-		}
+		pre_entity = unused_list;
 		unused_list = unused_list->next;
 	}
 	if (pre_entity)

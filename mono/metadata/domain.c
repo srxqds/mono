@@ -2076,6 +2076,7 @@ mono_domain_add_mem_track(gpointer addr, guint size)
 			_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
 			if (value->addr == addr)
 			{
+				g_print("mono_domain_add_mem_track with size: %d addr: %p\n", size, addr);
 				g_assert_not_reached();
 			}
 		}
@@ -2083,6 +2084,7 @@ mono_domain_add_mem_track(gpointer addr, guint size)
 	_GCEntity* value = g_new0(_GCEntity, 1);
 	value->addr = addr;
 	value->size = size;
+	g_print("mono_domain_add_mem_track with size: %d addr: %p\n", size, addr);
 	g_ptr_array_add(mem_addr_size_tracks, value);
 }
 
@@ -2107,14 +2109,15 @@ mono_domain_remove_mem_track(gpointer addr, guint size)
 		{
 			g_free(value);
 			g_ptr_array_remove_index(mem_addr_size_tracks, i);
+			g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
 			return;
 		}
 	}
-	if (trace_enabled)
+	/*if (trace_enabled)
 	{
 		g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
 		g_assert_not_reached();
-	}
+	}*/
 }
 
 static void
@@ -2166,8 +2169,8 @@ mono_domain_mempool_free(MonoDomain *domain, void* addr, guint size)
 	if (trace_enabled & MEMPOOL_TRACE)
 	{
 		mono_domain_remove_mem_track(addr, size);
-		if (!res)
-			g_print("mono_domain_mempool_free error with size %d addr %p", size, addr);
+		if(res)
+			g_print("mono_domain_mempool_free with size %d addr %p\n", size, addr);
 	}
 }
 
@@ -2175,10 +2178,14 @@ void
 mono_domain_code_free(MonoDomain* domain, void* addr, guint size)
 {
 	mono_domain_lock(domain);
-	mono_code_chunk_free(domain->code_mp, addr, size);
+	gboolean res = mono_code_chunk_free(domain->code_mp, addr, size);
 	mono_domain_unlock(domain);
 	if (trace_enabled & CODE_TRACE)
+	{
 		mono_domain_remove_mem_track(addr, size);
+		if(res)
+			g_print("mono_domain_code_free with size %d addr %p\n", size, addr);
+	}
 }
 
 static GPtrArray* mempool_gc_collects = NULL;

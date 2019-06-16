@@ -197,6 +197,40 @@ mono_code_unused_recycle(MonoCodeManager* root, MonoUnusedEntity* reuse_entity)
 	root->unuseds = reuse_entity;
 }
 
+
+static void
+mono_code_print(MonoCodeManager * root)
+{
+	MonoUnusedEntity* unused_list = root->unuseds;
+	char* last_begin = NULL;
+	char* last_end = NULL;
+	int count = 0;
+	while (unused_list)
+	{
+		if (unused_list->pos)
+		{
+			CodeChunk* chunk = mono_code_chunk_find(root, unused_list->pos);
+			g_print("%p, index: %d, begin: %d, end: %d, size: %d\n", chunk, count, unused_list->pos - chunk->data, unused_list->pos - chunk->data + unused_list->size, unused_list->size);
+			if (last_begin)
+			{
+				if (unused_list->pos < last_end)
+				{
+					g_assert_not_reached();
+				}
+				if (last_begin >= last_end)
+				{
+					g_assert_not_reached();
+				}
+			}
+			
+			last_begin = unused_list->pos;
+			last_end = unused_list->pos + unused_list->size;
+		}
+		count++;
+		unused_list = unused_list->next;
+	}
+}
+
 // insert free memory to unuseds
 static gboolean
 mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChunk* chunk)
@@ -220,7 +254,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 		char* pre_addr = unused_list->pos;
 		if (pre_addr >= pool_start && pre_addr < pool_end)
 		{
-			if (addr == unused_list->pos)
+			if (addr == unused_list->pos || (unused_list->pos < addr && unused_list->pos + unused_list->size > addr))
 			{
 				g_print("Free code repeatly addr: %p\n", addr);
 				return FALSE;
@@ -237,12 +271,14 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 					mono_code_unused_recycle(root, next_entity);
 					// mono_code_unused_status(root);
 				}
+				// mono_code_print(root);
 				return TRUE;
 			}
 			else if (addr + size == unused_list->pos)
 			{
 				unused_list->pos = addr;
 				unused_list->size += size;
+				// mono_code_print(root);
 				return TRUE;
 			}
 		}
@@ -261,31 +297,15 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 	new_entity->size = size;
 	new_entity->pos = addr;
 	unused_list = root->unuseds;
-	gboolean has_same_pool = FALSE;
 	MonoUnusedEntity* pre_entity = NULL;
 	while (unused_list)
 	{
 		char* pre_addr = unused_list->pos;
-		if (pre_addr >= pool_start && pre_addr < pool_end)
-		{
-			has_same_pool = TRUE;
-			if (pre_addr > addr)
-			{
-				break;
-			}
-			else
-			{
-				pre_entity = unused_list;
-			}
-		}
-		else if (has_same_pool)
+		if (pre_addr > addr)
 		{
 			break;
 		}
-		else // last
-		{
-			pre_entity = unused_list;
-		}
+		pre_entity = unused_list;
 		unused_list = unused_list->next;
 	}
 	if (pre_entity)
@@ -298,6 +318,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 		new_entity->next = root->unuseds;
 		root->unuseds = new_entity;
 	}
+	mono_code_print(root);
 	return TRUE;
 }
 
@@ -311,7 +332,7 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 	// max number
 	guint32 resue_size = (1 << (8* sizeof(guint32))) - 1;
 	guint32 align_mask = alignment - 1;
-	mono_code_unused_status(root);
+	// mono_code_unused_status(root);
 	while (unused_list)
 	{
 		if (unused_list->pos)
@@ -369,8 +390,6 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 				}
 			}
 		}
-		g_print("--------------->mono_code_unused_fetch size: %d\n", size);
-		mono_code_unused_status(root);
 		return rval;
 	}
 	return NULL;
@@ -911,8 +930,8 @@ mono_code_chunk_free(MonoCodeManager* cman, void* addr, int size)
 		return FALSE;
 	// return mono_code_unused_insert(cman, addr, size, chunk);
 	mono_bool res = mono_code_unused_insert(cman, addr, size, chunk);
-	g_print("---------------->mono_code_chunk_free size: %d\n", size);
-	mono_code_unused_status(cman);
+	// g_print("---------------->mono_code_chunk_free size: %d\n", size);
+	// mono_code_unused_status(cman);
 	return res;
 }
 
