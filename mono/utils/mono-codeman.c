@@ -267,9 +267,7 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 				if (next_entity && next_entity->pos >= pool_start && next_entity->pos < pool_end && (next_entity->pos == unused_list->pos + unused_list->size))
 				{
 					unused_list->size += next_entity->size;
-					// mono_code_unused_status(root);
 					mono_code_unused_recycle(root, next_entity);
-					// mono_code_unused_status(root);
 				}
 				// mono_code_print(root);
 				return TRUE;
@@ -278,7 +276,6 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 			{
 				unused_list->pos = addr;
 				unused_list->size += size;
-				// mono_code_print(root);
 				return TRUE;
 			}
 		}
@@ -337,14 +334,7 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 	{
 		if (unused_list->pos)
 		{
-			CodeChunk* chunk = mono_code_chunk_find(root, unused_list->pos);
-			guint32 pos = ALIGN_INT(unused_list->pos - chunk->data, alignment);
-			char* ptr1 = (void*)((((uintptr_t)chunk->data + align_mask) & ~(uintptr_t)align_mask) + pos);
 			char* ptr = (char*)(((uintptr_t)unused_list->pos + align_mask) & ~(uintptr_t)align_mask);
-			if (ptr1 != ptr)
-			{
-				int a = 1;
-			}
 			if (ptr + size <= unused_list->pos + unused_list->size)
 			{
 				if (ptr == unused_list->pos && unused_list->size == size)
