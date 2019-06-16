@@ -2059,6 +2059,7 @@ mono_domain_get_assemblies (MonoDomain *domain, gboolean refonly)
 
 
 // extend by dsqiu
+static int trace_enabled = FALSE;
 
 static void 
 mono_domain_add_mem_track(gpointer addr, guint size)
@@ -2067,13 +2068,16 @@ mono_domain_add_mem_track(gpointer addr, guint size)
 	{
 		mem_addr_size_tracks = g_ptr_array_new();
 	}
-	int i;
-	for (i = 0; i < mem_addr_size_tracks->len; i++)
+	if (trace_enabled)
 	{
-		_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
-		if (value->addr == addr)
+		int i;
+		for (i = 0; i < mem_addr_size_tracks->len; i++)
 		{
-			g_assert_not_reached();
+			_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
+			if (value->addr == addr)
+			{
+				g_assert_not_reached();
+			}
 		}
 	}
 	_GCEntity* value = g_new0(_GCEntity, 1);
@@ -2091,20 +2095,26 @@ mono_domain_remove_mem_track(gpointer addr, guint size)
 	for (i = 0; i < mem_addr_size_tracks->len; i++)
 	{
 		_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
-		if (value->addr == addr && value->size != size)
+		if (trace_enabled)
 		{
-			g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
-			g_assert_not_reached();
+			if (value->addr == addr && value->size != size)
+			{
+				g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
+				g_assert_not_reached();
+			}
 		}
 		if (value->addr == addr && value->size == size)
 		{
 			g_free(value);
 			g_ptr_array_remove_index(mem_addr_size_tracks, i);
-			break;
+			return;
 		}
 	}
-	g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
-	g_assert_not_reached();
+	if (trace_enabled)
+	{
+		g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
+		g_assert_not_reached();
+	}
 }
 
 static void
@@ -2131,7 +2141,7 @@ static void mono_domain_clear_mem_track()
 }
 
 
-static int trace_enabled = FALSE;
+
 void mono_domain_set_trace(int enable)
 {
 	trace_enabled = enable;
