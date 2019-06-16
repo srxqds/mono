@@ -423,6 +423,7 @@ mono_domain_create (void)
 	domain->code_mp = mono_code_manager_new ();
 	// extend by dsqiu
 	mono_mempool_set_reusable(domain->mp, TRUE);
+	// todo:ÑÓ³ÙÉèÖÃ£¬¼õÉÙÄÚ´æËéÆ¬
 	mono_code_set_reusable(domain->code_mp, TRUE);
 	// extend end
 	domain->lock_free_mp = lock_free_mempool_new ();

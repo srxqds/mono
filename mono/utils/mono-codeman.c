@@ -315,10 +315,11 @@ mono_code_unused_insert(MonoCodeManager* root, char* addr, gint32 size, CodeChun
 		new_entity->next = root->unuseds;
 		root->unuseds = new_entity;
 	}
-	mono_code_print(root);
+	// mono_code_print(root);
 	return TRUE;
 }
 
+// todo:ºı…Ÿƒ⁄¥ÊÀÈ∆¨
 static gpointer
 mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 {
@@ -329,7 +330,8 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 	// max number
 	guint32 resue_size = (1 << (8* sizeof(guint32))) - 1;
 	guint32 align_mask = alignment - 1;
-	// mono_code_unused_status(root);
+	// MonoUnusedEntity* match_best_entity = NULL;  
+	// MonoUnusedEntity* match_start_entity = NULL;
 	while (unused_list)
 	{
 		if (unused_list->pos)
@@ -340,6 +342,7 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 				if (ptr == unused_list->pos && unused_list->size == size)
 				{
 					reuse_entity = unused_list;
+					// match_best_entity = unused_list;
 					break;
 				}
 				else if (resue_size > unused_list->size)
@@ -948,15 +951,18 @@ void mono_code_manager_profiler(MonoCodeManager* cman)
 		count += 1;
 	}
 	MonoUnusedEntity* unuseds = cman->unuseds;
+	int unused_count = 0;
 	while (unuseds)
 	{
 		still_free += unuseds->size;
+		unused_count++;
 		unuseds = unuseds->next;
 	}
 	g_print("MonoCodeManager %p stats:\n", cman);
 	g_print("Total mem allocated: %d\n", size);
 	g_print("Chunk mem used: %d\n", used);
 	g_print("Num chunks: %d\n", count);
+	g_print("Num unuseds: %d\n", unused_count);
 	g_print("Free memory: %d\n", still_free);
 	g_print("\n");
 	

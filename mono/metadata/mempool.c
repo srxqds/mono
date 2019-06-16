@@ -723,15 +723,18 @@ momo_mempool_profiler(MonoMemPool *pool)
 		count++;
 	}
 	MonoUnusedEntity* unuseds = pool->unuseds;
+	int unused_count = 0;
 	while (unuseds)
 	{
 		still_free += unuseds->size;
+		unused_count++;
 		unuseds = unuseds->next;
 	}
 	still_free += pool->end - pool->pos;
 	g_print("Mempool %p stats:\n", pool);
 	g_print("Total mem allocated: %d\n", pool->d.allocated);
 	g_print("Num chunks: %d\n", count);
+	g_print("Num unuseds: %d\n", unused_count);
 	g_print("Free memory: %d\n", still_free);
 	g_print("Real used: %d\n", pool->d.allocated - still_free);
 	g_print("\n");
