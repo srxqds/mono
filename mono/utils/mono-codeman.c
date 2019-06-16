@@ -786,19 +786,23 @@ void*
 			/* Align the chunk->data we add to chunk->pos */
 			/* or we can't guarantee proper alignment     */
 			ptr = (void*)((((uintptr_t)chunk->data + align_mask) & ~(uintptr_t)align_mask) + chunk->pos);
-			if (ptr != chunk->data + chunk->pos)
-			{
-				int a = (char*)ptr - chunk->data - chunk->pos;
-				int c = a;
-			}
 			chunk->pos = ((char*)ptr - chunk->data) + size;
 			// extend by dsqiu
-			if (cman->reusable && last_pos != ptr)
+			// 如果内存不够，换行pos值，mono原先的实现不够严谨
+			if (chunk->size < chunk->pos)
 			{
-				mono_code_unused_insert(cman, last_pos, (char*)ptr - last_pos, chunk);
+				chunk->pos = last_pos - chunk->data;
+			}
+			else
+			{
+				if (cman->reusable && last_pos != ptr)
+				{
+					mono_code_unused_insert(cman, last_pos, (char*)ptr - last_pos, chunk);
+				}
+				return ptr;
 			}
 			// extend end
-			return ptr;
+			// return ptr;
 		}
 	}
 
@@ -821,6 +825,12 @@ void*
 		} else {
 			cman->current = chunk->next;
 		}
+		// extend by dsqiu
+		if (cman->reusable)
+		{
+			mono_code_unused_insert(cman, chunk->data + chunk->pos, chunk->size - chunk->pos, chunk);
+		}
+		// extend end
 		chunk->next = cman->full;
 		cman->full = chunk;
 		break;
