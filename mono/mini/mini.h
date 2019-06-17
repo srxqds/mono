@@ -2777,7 +2777,6 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly);
 void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly); 
 void mono_mini_remove_trampoline_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
-void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 // extend end
 
 #endif /* __MONO_MINI_H__ */

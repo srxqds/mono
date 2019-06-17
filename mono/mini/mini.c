@@ -81,6 +81,10 @@
 #include "aot-runtime.h"
 #include "mini-runtime.h"
 
+// extend by dsqiu
+#include "interp/interp.h"
+// extend end
+
 MonoCallSpec *mono_jit_trace_calls;
 MonoMethodDesc *mono_inject_async_exc_method;
 int mono_inject_async_exc_pos;
