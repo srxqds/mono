@@ -4853,7 +4853,7 @@ void mono_assembly_cleanup_domain_binding_for_unused_assembly(MonoDomain* domain
 			*iter = l->next;
 			mono_assembly_binding_info_free(info);
 			g_free(info);
-			g_slist_delete_link(&loaded_assembly_bindings, l);
+			g_slist_delete_link(loaded_assembly_bindings, l);
 			break;
 		}
 		else {
