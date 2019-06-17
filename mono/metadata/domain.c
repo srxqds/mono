@@ -2214,7 +2214,7 @@ mono_domain_code_gc_init(MonoDomain* domain, MonoAssembly* assembly)
 }
 
 void
-(mono_domain_mempool_gc_collect) (MonoDomain* domain, void* addr, guint size, char *file, char* function, int line)
+(mono_domain_mempool_gc_collect) (MonoDomain* domain, void* addr, guint size, const char *file, const char* function, int line)
 {
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
@@ -2225,7 +2225,7 @@ void
 }
 
 void
-(mono_domain_code_gc_collect)(MonoDomain* domain, void* addr, guint size, char *file, char* function, int line)
+(mono_domain_code_gc_collect)(MonoDomain* domain, void* addr, guint size, const char *file, const char* function, int line)
 {
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
@@ -2237,7 +2237,7 @@ void
 }
 
 void 
-(mono_domain_strdup_collect)(MonoDomain* domain, const char* str, char *file, char* function, int line)
+(mono_domain_strdup_collect)(MonoDomain* domain, const char* str, const char *file, const char* function, int line)
 {
 	if (!str)
 		return;
@@ -2341,7 +2341,7 @@ mono_domain_contain_unloadable_assembly(const char* assembly_name)
 	return FALSE;
 }
 
-static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_t size, char *file, char* function, int line)
+static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_t size, const char *file, const char* function, int line)
 {
 	if (!domain_mempool_tracks)
 	{
@@ -2362,7 +2362,7 @@ static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_
 
 }
 
-static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t size, char *file, char* function, int line)
+static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t size, const char *file, const char* function, int line)
 {
 	if (!domain_code_tracks)
 	{
@@ -2383,28 +2383,28 @@ static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t s
 	g_ptr_array_add(array, entity);
 }
 
-void (mono_domain_method_mempool_track)(MonoMethod* method, void* addr, uint32_t size, char *file, char* function, int line)
+void (mono_domain_method_mempool_track)(MonoMethod* method, void* addr, uint32_t size, const char *file, const char* function, int line)
 {
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
 	mono_domain_add_mempool_tracks(method->klass, addr, size, file, function, line);
 }
 
-void (mono_domain_method_code_track)(MonoMethod* method, void* addr, uint32_t size, char *file, char* function, int line)
+void (mono_domain_method_code_track)(MonoMethod* method, void* addr, uint32_t size, const char *file, const char* function, int line)
 {
 	if (!method || !mono_domain_contain_unloadable_assembly(method->klass->image->assembly_name))
 		return;
 	mono_domain_add_code_tracks(method->klass, addr, size, file, function, line);
 }
 
-void (mono_domain_vtable_mempool_track)(MonoVTable* vtable, void* addr, uint32_t size, char *file, char* function, int line)
+void (mono_domain_vtable_mempool_track)(MonoVTable* vtable, void* addr, uint32_t size, const char *file, const char* function, int line)
 {
 	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
 	mono_domain_add_mempool_tracks(vtable->klass, addr, size, file, function, line);
 }
 
-void (mono_domain_vtable_code_track)(MonoVTable* vtable, void* addr, uint32_t size, char *file, char* function, int line)
+void (mono_domain_vtable_code_track)(MonoVTable* vtable, void* addr, uint32_t size, const char *file, const char* function, int line)
 {
 	if (!vtable || !mono_domain_contain_unloadable_assembly(vtable->klass->image->assembly_name))
 		return;
@@ -2473,7 +2473,7 @@ void mono_domain_profiler(MonoDomain* domain)
 }
 
 gpointer
-mono_domain_alloc_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line)
+mono_domain_alloc_with_trace(MonoDomain* domain, guint size, const char *file, const char* function, int line)
 {
 	gpointer res;
 
@@ -2491,7 +2491,7 @@ mono_domain_alloc_with_trace(MonoDomain* domain, guint size, char *file, char* f
 	return res;
 }
 gpointer
-mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line)
+mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, const char *file, const char* function, int line)
 {
 	gpointer res;
 
@@ -2509,7 +2509,7 @@ mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, char *file, char* 
 	return res;
 }
 gpointer
-mono_domain_code_reserve_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line)
+mono_domain_code_reserve_with_trace(MonoDomain* domain, guint size, const char *file, const char* function, int line)
 {
 	gpointer res;
 
@@ -2524,7 +2524,7 @@ mono_domain_code_reserve_with_trace(MonoDomain* domain, guint size, char *file, 
 	return res;
 }
 gpointer
-mono_domain_code_reserve_align_with_trace(MonoDomain* domain, guint size, guint align, char *file, char* function, int line)
+mono_domain_code_reserve_align_with_trace(MonoDomain* domain, guint size, guint align, const char *file, const char* function, int line)
 {
 	gpointer res;
 

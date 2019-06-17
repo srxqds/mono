@@ -622,12 +622,12 @@ MONO_API void mono_assembly_cleanup_domain_binding_for_unused_assembly(MonoDomai
 void mono_reflection_cleanup_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_jit_info_table_cleanup_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_free(MonoDomain *domain, void* addr, guint size);
-void mono_domain_strdup_collect(MonoDomain* domain, const char* str, char *file, char* function, int line);
+void mono_domain_strdup_collect(MonoDomain* domain, const char* str, const char *file, const char* function, int line);
 MONO_API void mono_domain_code_free(MonoDomain* domain, void* addr, guint size);
 MONO_API void mono_domain_code_gc_init(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_gc_init(MonoDomain* domain, MonoAssembly* assembly);
-void mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size, char *file, char* function, int line);
-void mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size, char *file, char* function, int line);
+void mono_domain_code_gc_collect(MonoDomain* domain, void* addr, guint size, const char *file, const char* function, int line);
+void mono_domain_mempool_gc_collect(MonoDomain* domain, void* addr, guint size, const char *file, const char* function, int line);
 MONO_API void mono_domain_code_gc_clear(MonoDomain* domain, MonoAssembly* assembly);
 MONO_API void mono_domain_mempool_gc_clear(MonoDomain* domain, MonoAssembly* assembly);
 
@@ -638,13 +638,13 @@ MONO_API void mono_domain_mempool_gc_clear(MonoDomain* domain, MonoAssembly* ass
 void mono_domain_remove_jit_info_for_method(MonoDomain* domain, MonoMethod* method);
 
 gpointer
-mono_domain_alloc_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line);
+mono_domain_alloc_with_trace(MonoDomain* domain, guint size, const char *file, const char* function, int line);
 gpointer
-mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line);
+mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, const char *file, const char* function, int line);
 gpointer
-mono_domain_code_reserve_with_trace(MonoDomain* domain, guint size, char *file, char* function, int line);
+mono_domain_code_reserve_with_trace(MonoDomain* domain, guint size, const char *file, const char* function, int line);
 gpointer
-mono_domain_code_reserve_align_with_trace(MonoDomain* domain, guint size, guint align, char *file, char* function, int line);
+mono_domain_code_reserve_align_with_trace(MonoDomain* domain, guint size, guint align, const char *file, const char* function, int line);
 // extend end
 
 MonoJitInfo* mono_jit_info_table_find_internal (MonoDomain *domain, gpointer addr, gboolean try_aot, gboolean allow_trampolines);
