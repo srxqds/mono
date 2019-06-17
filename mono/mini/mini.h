@@ -2771,4 +2771,11 @@ MonoType*   mini_native_type_replace_type (MonoType *type) MONO_LLVM_INTERNAL;
 MonoMethod*
 mini_method_to_shared (MonoMethod *method); // null if not shared
 
+// extend by dsqiu
+void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly); 
+void mono_mini_remove_trampoline_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
+void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
+void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
+// extend end
+
 #endif /* __MONO_MINI_H__ */

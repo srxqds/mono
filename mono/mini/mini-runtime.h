@@ -583,5 +583,6 @@ gboolean MONO_SIG_HANDLER_SIGNATURE (mono_chain_signal);
 
 void mini_register_sigterm_handler (void);
 
+
 #endif /* __MONO_MINI_RUNTIME_H__ */
 

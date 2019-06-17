@@ -2128,4 +2128,8 @@ mono_object_get_data (MonoObject *o);
 gpointer
 mono_vtype_get_field_addr (gpointer vtype, MonoClassField *field);
 
+// extend by dsqiu
+void mono_object_remove_gerneric_virtual_case_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
+// extend end
+
 #endif /* __MONO_OBJECT_INTERNALS_H__ */

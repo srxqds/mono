@@ -256,11 +256,6 @@ mono_domain_code_track_clear(MonoDomain* domain, MonoAssembly* assembly);
 #define mono_domain_vtable_mempool_track(vtable, addr, size) (mono_domain_vtable_mempool_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
 #define mono_domain_vtable_code_track(vtable, addr, size) (mono_domain_vtable_code_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
 
-void mono_object_remove_gerneric_virtual_case_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
-void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
-void mono_mini_remove_trampoline_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
-void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
-void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 
 void mono_domain_profiler(MonoDomain* domain);
 #define MEMPOOL_TRACE 1
