@@ -193,8 +193,11 @@ mono_code_unused_recycle(MonoCodeManager* root, MonoUnusedEntity* reuse_entity)
 		}
 		unused_list = unused_list->next;
 	}
-	reuse_entity->next = root->unuseds;
-	root->unuseds = reuse_entity;
+	if (root->unuseds != reuse_entity)
+	{
+		reuse_entity->next = root->unuseds;
+		root->unuseds = reuse_entity;
+	}
 }
 
 

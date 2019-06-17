@@ -2532,7 +2532,7 @@ create_jit_info (MonoCompile *cfg, MonoMethod *method_to_compile)
 		jinfo = (MonoJitInfo *)g_malloc0 (mono_jit_info_size (flags, num_clauses, num_holes));
 	else
 	{
-		jinfo = (MonoJitInfo *)mono_domain_alloc0(cfg->domain, mono_jit_info_size(flags, num_clauses, num_holes));
+		jinfo = (MonoJitInfo *)mono_domain_alloc0(cfg->domain, mono_jit_info_size(flags, num_clauses, num_holes));  // check by dsqiu
 		// extend by dsqiu
 		jinfo->alloc_size = mono_jit_info_size(flags, num_clauses, num_holes);
 		jinfo->code_alloc = cfg->code_alloc;
@@ -2588,8 +2588,8 @@ create_jit_info (MonoCompile *cfg, MonoMethod *method_to_compile)
 			gi->nlocs = g_slist_length (loclist);
 			if (cfg->method->dynamic)
 				gi->locations = (MonoDwarfLocListEntry *)g_malloc0 (gi->nlocs * sizeof (MonoDwarfLocListEntry));
-			else  // check by dsqiu
-				gi->locations = (MonoDwarfLocListEntry *)mono_domain_alloc0 (cfg->domain, gi->nlocs * sizeof (MonoDwarfLocListEntry));
+			else  
+				gi->locations = (MonoDwarfLocListEntry *)mono_domain_alloc0 (cfg->domain, gi->nlocs * sizeof (MonoDwarfLocListEntry));  // check by dsqiu
 			i = 0;
 			for (l = loclist; l; l = l->next) {
 				memcpy (&(gi->locations [i]), l->data, sizeof (MonoDwarfLocListEntry));
