@@ -284,7 +284,7 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 	if (!root->reusable)
 		return NULL;
 	MonoUnusedEntity* unused_list = root->unuseds;
-	MonoUnusedEntity* pre_entity = NULL;
+	// MonoUnusedEntity* pre_entity = NULL;
 	MonoUnusedEntity* reuse_entity = NULL;
 	guint32 resue_size = MONO_MEMPOOL_PREFER_INDIVIDUAL_ALLOCATION_SIZE + 1;
 	while (unused_list)
@@ -302,7 +302,7 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 				reuse_entity = unused_list;
 			}
 		}
-		pre_entity = unused_list;
+		// pre_entity = unused_list;
 		unused_list = unused_list->next;
 	}
 	if (reuse_entity)
@@ -316,20 +316,7 @@ mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
 		else  // remove from list and insert header
 		{
 			mono_mempool_unused_recycle(root, reuse_entity);
-			//mono_mempool_is_loop(root);
-			/*if (pre_entity)
-			{
-				pre_entity->next = reuse_entity->next;
-			}
-			reuse_entity->pos = NULL;
-			reuse_entity->size = 0;
-			reuse_entity->next = NULL;
-			if(root->unuseds)
-				reuse_entity->next = root->unuseds->next;
-			root->unuseds = reuse_entity;*/
 		}
-		// g_print("mono_mempool_unused_fetch size: %d\n", size);
-		// mono_mempool_unused_status(root);
 		
 		return rval;
 	}
