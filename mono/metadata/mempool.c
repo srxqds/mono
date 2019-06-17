@@ -719,10 +719,10 @@ mono_mempool_strdup_free(MonoMemPool *pool, const char* value)
 {
 	if (!value)
 		return 0;
-	if (!mono_mempool_contains_addr(pool, value))
+	if (!mono_mempool_contains_addr(pool, (void*)value))
 		return 0;
 	long len = strlen(value);
-	mono_mempool_free(pool, value, len + 1);
+	mono_mempool_free(pool, (void*)value, len + 1);
 	return len;
 }
 

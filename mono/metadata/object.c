@@ -2063,7 +2063,7 @@ mono_class_create_runtime_vtable (MonoDomain *domain, MonoClass *klass, MonoErro
 	else {
 		alloc_offset = 0;
 	}
-	vt->alloc_start = (char*)interface_offsets - alloc_offset;
+	vt->alloc_start = (gpointer*)((char*)interface_offsets - alloc_offset);
 	// extend end
 	g_assert (!((gsize)vt & 7));
 
