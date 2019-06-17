@@ -227,4 +227,5 @@ enum_type:
 	return -1;
 }
 
+
 #endif /* __MONO_MINI_INTERPRETER_INTERNALS_H__ */

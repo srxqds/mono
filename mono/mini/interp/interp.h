@@ -35,8 +35,4 @@ typedef struct _InterpMethodArguments InterpMethodArguments;
 MONO_API void mono_ee_interp_init (const char *);
 
 
-// extend by dsqiu
-void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
-// extend end
-
 #endif /* __MONO_MINI_INTERPRETER_H__ */

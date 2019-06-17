@@ -6132,52 +6132,6 @@ interp_stop_single_stepping (void)
 	ss_enabled = FALSE;
 }
 
-void
-mono_ee_interp_init (const char *opts)
-{
-	g_assert (mono_ee_api_version () == MONO_EE_API_VERSION);
-	g_assert (!interp_init_done);
-	interp_init_done = TRUE;
-
-	mono_native_tls_alloc (&thread_context_id, NULL);
-	set_context (NULL);
-
-	interp_parse_options (opts);
-	mono_interp_transform_init ();
-
-	MonoEECallbacks c;
-#ifdef MONO_ARCH_HAVE_INTERP_ENTRY_TRAMPOLINE
-	c.entry_from_trampoline = interp_entry_from_trampoline;
-#endif
-	c.to_native_trampoline = interp_to_native_trampoline;
-	c.create_method_pointer = interp_create_method_pointer;
-	c.runtime_invoke = interp_runtime_invoke;
-	c.init_delegate = interp_init_delegate;
-	c.delegate_ctor = interp_delegate_ctor;
-	c.get_remoting_invoke = interp_get_remoting_invoke;
-	c.set_resume_state = interp_set_resume_state;
-	c.run_finally = interp_run_finally;
-	c.run_filter = interp_run_filter;
-	c.frame_iter_init = interp_frame_iter_init;
-	c.frame_iter_next = interp_frame_iter_next;
-	c.find_jit_info = interp_find_jit_info;
-	c.set_breakpoint = interp_set_breakpoint;
-	c.clear_breakpoint = interp_clear_breakpoint;
-	c.frame_get_jit_info = interp_frame_get_jit_info;
-	c.frame_get_ip = interp_frame_get_ip;
-	c.frame_get_arg = interp_frame_get_arg;
-	c.frame_get_local = interp_frame_get_local;
-	c.frame_get_this = interp_frame_get_this;
-	c.frame_get_parent = interp_frame_get_parent;
-	c.frame_arg_to_data = interp_frame_arg_to_data;
-	c.data_to_frame_arg = interp_data_to_frame_arg;
-	c.frame_arg_to_storage = interp_frame_arg_to_storage;
-	c.frame_arg_set_storage = interp_frame_arg_set_storage;
-	c.start_single_stepping = interp_start_single_stepping;
-	c.stop_single_stepping = interp_stop_single_stepping;
-	mini_install_interp_callbacks (&c);
-}
-
 // extend by dsqiu
 static gboolean
 interp_code_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
@@ -6224,12 +6178,14 @@ interp_method_pointer_hash_foreach_remove(gpointer key, gpointer value, gpointer
 	if (interp_method->method->klass->image == image)
 	{
 		// todo remove addr
+		// NOTICE by dsqiu
 		return TRUE;
 	}
 	return FALSE;
 }
 
-void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+static void
+mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
 {
 	MonoImage* image = assembly->image;
 	_DomainAssemblyData user_data;
@@ -6245,3 +6201,54 @@ void mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembl
 
 
 // extend end
+
+void
+mono_ee_interp_init (const char *opts)
+{
+	g_assert (mono_ee_api_version () == MONO_EE_API_VERSION);
+	g_assert (!interp_init_done);
+	interp_init_done = TRUE;
+
+	mono_native_tls_alloc (&thread_context_id, NULL);
+	set_context (NULL);
+
+	interp_parse_options (opts);
+	mono_interp_transform_init ();
+
+	MonoEECallbacks c;
+#ifdef MONO_ARCH_HAVE_INTERP_ENTRY_TRAMPOLINE
+	c.entry_from_trampoline = interp_entry_from_trampoline;
+#endif
+	c.to_native_trampoline = interp_to_native_trampoline;
+	c.create_method_pointer = interp_create_method_pointer;
+	c.runtime_invoke = interp_runtime_invoke;
+	c.init_delegate = interp_init_delegate;
+	c.delegate_ctor = interp_delegate_ctor;
+	c.get_remoting_invoke = interp_get_remoting_invoke;
+	c.set_resume_state = interp_set_resume_state;
+	c.run_finally = interp_run_finally;
+	c.run_filter = interp_run_filter;
+	c.frame_iter_init = interp_frame_iter_init;
+	c.frame_iter_next = interp_frame_iter_next;
+	c.find_jit_info = interp_find_jit_info;
+	c.set_breakpoint = interp_set_breakpoint;
+	c.clear_breakpoint = interp_clear_breakpoint;
+	c.frame_get_jit_info = interp_frame_get_jit_info;
+	c.frame_get_ip = interp_frame_get_ip;
+	c.frame_get_arg = interp_frame_get_arg;
+	c.frame_get_local = interp_frame_get_local;
+	c.frame_get_this = interp_frame_get_this;
+	c.frame_get_parent = interp_frame_get_parent;
+	c.frame_arg_to_data = interp_frame_arg_to_data;
+	c.data_to_frame_arg = interp_data_to_frame_arg;
+	c.frame_arg_to_storage = interp_frame_arg_to_storage;
+	c.frame_arg_set_storage = interp_frame_arg_set_storage;
+	c.start_single_stepping = interp_start_single_stepping;
+	c.stop_single_stepping = interp_stop_single_stepping;
+	
+	// extend by dsqiu
+	c.interp_handle_for_unused_assembly = mono_mini_remove_interp_for_unused_assembly;
+	// extend end
+	mini_install_interp_callbacks (&c);
+}
+

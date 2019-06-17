@@ -4355,6 +4355,7 @@ mono_target_pagesize (void)
 
 // extend by dsqiu
 
+
 static gboolean
 mono_domain_remove_unused_special_field(gpointer key, gpointer value, gpointer user_data)
 {
@@ -4530,7 +4531,9 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 
 	// free_domain_hook: mini_free_jit_domain_info
 	mono_mini_remove_generic_sharing_for_unused_assembly(domain, assembly);
-	mono_mini_remove_interp_for_unused_assembly(domain, assembly);
+	MonoEECallbacks* mono_ee_callbacks = mono_install_interp_callbacks();
+	if(mono_ee_callbacks && mono_ee_calbacks->interp_handle_for_unused_assembly)
+		mono_ee_calbacks->interp_handle_for_unused_assembly(domain, assembly);
 	mono_mini_remove_trampoline_for_unused_assembly(domain, assembly);
 	mono_mini_remove_runtime_info_for_unused_assembly(domain, assembly);
 	// type_hash
