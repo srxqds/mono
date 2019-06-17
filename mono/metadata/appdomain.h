@@ -232,8 +232,7 @@ typedef struct {
 	MonoDomain* domain;
 } _DomainAssemblyData;
 
-MONO_API void
-mono_domain_remove_unused_assembly(MonoAssembly* assembly);
+
 MONO_API void
 mono_domain_add_unloadable_assembly(MonoDomain* domain, const char* assembly_name);
 MONO_API void
@@ -255,7 +254,12 @@ mono_domain_code_track_clear(MonoDomain* domain, MonoAssembly* assembly);
 #define mono_domain_method_code_track(method, addr, size) (mono_domain_method_code_track((method), (addr), (size), __FILE__, __func__, __LINE__));
 #define mono_domain_vtable_mempool_track(vtable, addr, size) (mono_domain_vtable_mempool_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
 #define mono_domain_vtable_code_track(vtable, addr, size) (mono_domain_vtable_code_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
-
+void
+deregister_reflection_info_roots_for_unused_assembly(MonoDomain *domain, MonoAssembly* target);
+void 
+zero_static_data_for_unused_assembly(MonoVTable* vtable);
+void 
+clear_cached_vtable_for_unused_assembly(MonoVTable* vtable);
 
 void mono_domain_profiler(MonoDomain* domain);
 #define MEMPOOL_TRACE 1

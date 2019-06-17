@@ -2772,6 +2772,8 @@ MonoMethod*
 mini_method_to_shared (MonoMethod *method); // null if not shared
 
 // extend by dsqiu
+MONO_API void
+mono_domain_remove_unused_assembly(MonoAssembly* assembly);
 void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly); 
 void mono_mini_remove_trampoline_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
 void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
