@@ -2237,7 +2237,7 @@ void
 }
 
 void 
-(mono_domain_strdup_collect)(MonoDomain* domain, const char* str, const char *file, const char* function, int line)
+(mono_domain_strdup_collect)(MonoDomain* domain, char* str, const char *file, const char* function, int line)
 {
 	if (!str)
 		return;
