@@ -4,6 +4,7 @@
 #include <mono/metadata/image.h>
 #include <mono/metadata/object.h>
 #include <mono/metadata/threads.h>
+#include <mono/mini/mini.h>
 
 void internal_test()
 {
@@ -38,7 +39,7 @@ main(int argc, char* argv[]) {
 	MonoClass* firstClass = mono_class_from_name(firstImage, "UnloadAssemblyFirst", "TestFirst");
 	MonoMethod* firstStaticMethod = mono_class_get_method_from_name(firstClass, "FirstStaticMethod", 0);
 	mono_runtime_invoke(firstStaticMethod, NULL, NULL, NULL);
-	mono_domain_set_trace(2);
+	mono_domain_set_trace(1);
 	MonoAssembly* secondAssembly = mono_assembly_open("F:\\trunk_branch\\custom_software\\MonoEmbedded\\TestCSharp\\Plugins\\UnrealMono\\tools\\Test\\UnloadAssemblySecond\\bin\\Debug\\UnloadAssemblySecond.dll", &status);
 	MonoImage* ScriptImage = mono_assembly_get_image(secondAssembly);
 	MonoClass* monoFooClass = mono_class_from_name(ScriptImage, "UnloadAssemblySecond", "TestSecond");
@@ -50,7 +51,7 @@ main(int argc, char* argv[]) {
 	{
 		// 再加载一次
 		// if(i == 14)
-		mono_domain_set_trace(2);
+		mono_domain_set_trace(1);
 		secondAssembly = mono_assembly_open("F:\\trunk_branch\\custom_software\\MonoEmbedded\\TestCSharp\\Plugins\\UnrealMono\\tools\\Test\\UnloadAssemblySecond\\bin\\Debug\\UnloadAssemblySecond.dll", &status);
 		ScriptImage = mono_assembly_get_image(secondAssembly);
 		monoFooClass = mono_class_from_name(ScriptImage, "UnloadAssemblySecond", "TestSecond");
