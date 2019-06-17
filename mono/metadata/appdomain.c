@@ -3113,7 +3113,7 @@ static gboolean
 mono_domain_remove_unused_type_hash(gpointer key, gpointer value, gpointer user_data)
 {
 	MonoType* mono_type = (MonoType*)key;
-	MonoReflectionType* res = (MonoReflectionType *)value;
+	// MonoReflectionType* res = (MonoReflectionType *)value;
 	MonoImage* image = (MonoImage*)user_data;
 	MonoClass* mono_class = NULL;
 	if (mono_type->type == MONO_TYPE_CLASS || mono_type->type == MONO_TYPE_VALUETYPE)
@@ -3233,7 +3233,10 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 		// remove runtime_generic_context
 		if (removed_vtable->runtime_generic_context)
 		{
-			guint32 size = mono_class_rgctx_get_array_size(0, FALSE) * sizeof(gpointer);
+			// NOTIC by dsqiu
+			// 从 mini-generic-sharing.c 中抄过来
+			// mono_class_rgctx_get_array_size(0, FALSE) = 4
+			guint32 size = 4 * sizeof(gpointer);
 			mono_domain_mempool_gc_collect(domain, removed_vtable->runtime_generic_context, size);
 		}
 

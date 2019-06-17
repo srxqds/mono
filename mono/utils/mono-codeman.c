@@ -331,7 +331,7 @@ mono_code_unused_fetch(MonoCodeManager* root, guint32 size, guint32 alignment)
 	MonoUnusedEntity* unused_list = root->unuseds;
 	MonoUnusedEntity* reuse_entity = NULL;
 	// max number
-	guint32 resue_size = (1 << (8* sizeof(guint32))) - 1;
+	guint32 resue_size = (1 << (4* sizeof(guint32))) - 1;
 	guint32 align_mask = alignment - 1;
 	// MonoUnusedEntity* match_best_entity = NULL;  
 	// MonoUnusedEntity* match_start_entity = NULL;
@@ -945,7 +945,6 @@ void mono_code_manager_profiler(MonoCodeManager* cman)
 {
 	if (!cman)
 		return;
-	MonoCodeManager *p;
 	int count = 0;
 	guint32 still_free = 0;
 	CodeChunk *chunk;
