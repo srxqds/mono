@@ -6184,7 +6184,7 @@ interp_method_pointer_hash_foreach_remove(gpointer key, gpointer value, gpointer
 	return FALSE;
 }
 
-static void
+void
 mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
 {
 	MonoImage* image = assembly->image;
