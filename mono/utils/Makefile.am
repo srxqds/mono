@@ -41,9 +41,10 @@ endif
 
 if HOST_WIN32
 win32_sources = \
-	os-event-win32.c \
+	mono-os-semaphore-win32.c \
 	mono-os-wait-win32.c \
-	mono-os-semaphore-win32.c
+	mono-windows-thread-name.c \
+	os-event-win32.c
 
 platform_sources = $(win32_sources)
 else
@@ -115,6 +116,7 @@ monoutils_sources = \
 	mono-string.h		\
 	mono-time.c  		\
 	mono-time.h  		\
+	strenc-internals.h 	\
 	strenc.h		\
 	strenc.c		\
 	mono-uri.c		\

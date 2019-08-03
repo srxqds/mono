@@ -2,10 +2,11 @@
 mac_BIN_DIR = $(TOP)/sdks/out/mac-bin
 mac_PKG_CONFIG_DIR = $(TOP)/sdks/out/mac-pkgconfig
 mac_LIBS_DIR = $(TOP)/sdks/out/mac-libs
+mac_TPN_DIR = $(TOP)/sdks/out/mac-tpn
 mac_MONO_VERSION = $(TOP)/sdks/out/mac-mono-version.txt
 
-mac_ARCHIVE += mac-bin mac-pkgconfig mac-libs mac-mono-version.txt
-ADDITIONAL_PACKAGE_DEPS += $(mac_BIN_DIR) $(mac_PKG_CONFIG_DIR) $(mac_LIBS_DIR) $(mac_MONO_VERSION)
+mac_ARCHIVE += mac-bin mac-pkgconfig mac-libs mac-tpn mac-mono-version.txt
+ADDITIONAL_PACKAGE_DEPS += $(mac_BIN_DIR) $(mac_PKG_CONFIG_DIR) $(mac_LIBS_DIR) $(mac_TPN_DIR) $(mac_MONO_VERSION)
 
 ##
 # Parameters
@@ -26,14 +27,14 @@ _mac-$(1)_AC_VARS= \
 	ac_cv_func_utimensat=no
 
 _mac-$(1)_CFLAGS= \
+	$$(mac-$(1)_SYSROOT) \
 	-arch $(2)
 
 _mac-$(1)_CXXFLAGS= \
+	$$(mac-$(1)_SYSROOT) \
 	-arch $(2)
 
-_mac-$(1)_CPPFLAGS= \
-	-isysroot $(3)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX$(MACOS_VERSION).sdk \
-	-mmacosx-version-min=$(MACOS_VERSION_MIN) \
+_mac-$(1)_CPPFLAGS=
 
 _mac-$(1)_LDFLAGS= \
 	-Wl,-no_weak_imports
@@ -54,6 +55,9 @@ _mac-$(1)_CONFIGURE_FLAGS= \
 $$(eval $$(call RuntimeTemplate,mac,$(1),$(2)-apple-darwin10,yes))
 
 endef
+
+mac-mac32_SYSROOT=-isysroot $(XCODE32_DIR)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk -mmacosx-version-min=$(MACOS_VERSION_MIN)
+mac-mac64_SYSROOT=-isysroot $(XCODE_DIR)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX$(MACOS_VERSION).sdk -mmacosx-version-min=$(MACOS_VERSION_MIN)
 
 $(eval $(call MacTemplate,mac32,i386,$(XCODE32_DIR)))
 $(eval $(call MacTemplate,mac64,x86_64,$(XCODE_DIR)))
@@ -94,3 +98,9 @@ $(mac_LIBS_DIR): package-mac-mac32 package-mac-mac64
 $(mac_MONO_VERSION): $(TOP)/configure.ac
 	mkdir -p $(dir $(mac_MONO_VERSION))
 	grep AC_INIT $(TOP)/configure.ac | sed -e 's/.*\[//' -e 's/\].*//' > $@
+
+$(mac_TPN_DIR)/LICENSE:
+	mkdir -p $(mac_TPN_DIR)
+	cd $(TOP) && rsync -r --include='THIRD-PARTY-NOTICES.TXT' --include='license.txt' --include='License.txt' --include='LICENSE' --include='LICENSE.txt' --include='LICENSE.TXT' --include='COPYRIGHT.regex' --include='*/' --exclude="*" --prune-empty-dirs . $(mac_TPN_DIR)
+
+$(mac_TPN_DIR): $(mac_TPN_DIR)/LICENSE

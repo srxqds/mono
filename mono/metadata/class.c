@@ -65,10 +65,6 @@ static gboolean can_access_type (MonoClass *access_klass, MonoClass *member_klas
 static char* mono_assembly_name_from_token (MonoImage *image, guint32 type_token);
 static guint32 mono_field_resolve_flags (MonoClassField *field);
 
-static MonoProperty* mono_class_get_property_from_name_internal (MonoClass *klass, const char *name);
-
-static gboolean mono_class_is_subclass_of_internal (MonoClass *klass, MonoClass *klassc, gboolean check_interfaces);
-
 GENERATE_GET_CLASS_WITH_CACHE (valuetype, "System", "ValueType")
 GENERATE_TRY_GET_CLASS_WITH_CACHE (handleref, "System.Runtime.InteropServices", "HandleRef")
 
@@ -1724,15 +1720,6 @@ mono_class_get_implemented_interfaces (MonoClass *klass, MonoError *error)
 	return res;
 }
 
-static int
-compare_interface_ids (const void *p_key, const void *p_element)
-{
-	MonoClass *key = (MonoClass *)p_key;
-	MonoClass *element = *(MonoClass **)p_element;
-	
-	return (m_class_get_interface_id (key) - m_class_get_interface_id (element));
-}
-
 /*FIXME verify all callers if they should switch to mono_class_interface_offset_with_variance*/
 int
 mono_class_interface_offset (MonoClass *klass, MonoClass *itf)
@@ -2495,25 +2482,6 @@ mono_class_get_event_token (MonoEvent *event)
 
 	g_assert_not_reached ();
 	return 0;
-}
-
-/**
- * mono_class_get_property_from_name:
- * \param klass a class
- * \param name name of the property to lookup in the specified class
- *
- * Use this method to lookup a property in a class
- * \returns the \c MonoProperty with the given name, or NULL if the property
- * does not exist on the \p klass.
- */
-MonoProperty*
-mono_class_get_property_from_name (MonoClass *klass, const char *name)
-{
-	MonoProperty *result = NULL;
-	MONO_ENTER_GC_UNSAFE;
-	result = mono_class_get_property_from_name_internal (klass, name);
-	MONO_EXIT_GC_UNSAFE;
-	return result;
 }
 
 MonoProperty*
@@ -3358,37 +3326,6 @@ mono_class_try_load_from_name (MonoImage *image, const char* name_space, const c
 	return klass;
 }
 
-
-/**
- * mono_class_is_subclass_of:
- * \param klass class to probe if it is a subclass of another one
- * \param klassc the class we suspect is the base class
- * \param check_interfaces whether we should perform interface checks
- *
- * This method determines whether \p klass is a subclass of \p klassc.
- *
- * If the \p check_interfaces flag is set, then if \p klassc is an interface
- * this method return TRUE if the \p klass implements the interface or
- * if \p klass is an interface, if one of its base classes is \p klass.
- *
- * If \p check_interfaces is false, then if \p klass is not an interface,
- * it returns TRUE if the \p klass is a subclass of \p klassc.
- *
- * if \p klass is an interface and \p klassc is \c System.Object, then this function
- * returns TRUE.
- *
- */
-gboolean
-mono_class_is_subclass_of (MonoClass *klass, MonoClass *klassc, 
-			   gboolean check_interfaces)
-{
-	gboolean result;
-	MONO_ENTER_GC_UNSAFE;
-	result = mono_class_is_subclass_of_internal (klass, klassc, check_interfaces);
-	MONO_EXIT_GC_UNSAFE;
-	return result;
-}
-
 static gboolean 
 mono_interface_implements_interface (MonoClass *interface_implementer, MonoClass *interface_implemented)
 {
@@ -3414,6 +3351,7 @@ gboolean
 mono_class_is_subclass_of_internal (MonoClass *klass, MonoClass *klassc,
 				    gboolean check_interfaces)
 {
+	MONO_REQ_GC_UNSAFE_MODE;
 	/* FIXME test for interfaces with variant generic arguments */
 	mono_class_init_internal (klass);
 	mono_class_init_internal (klassc);
@@ -3848,7 +3786,7 @@ mono_class_is_assignable_from_checked (MonoClass *klass, MonoClass *oklass, gboo
 			*result = TRUE;
 			return;
 		}
-	}else if (m_class_get_rank (klass)) {
+	} else if (m_class_get_rank (klass)) {
 		MonoClass *eclass, *eoclass;
 
 		if (m_class_get_rank (oklass) != m_class_get_rank (klass)) {
@@ -3873,10 +3811,52 @@ mono_class_is_assignable_from_checked (MonoClass *klass, MonoClass *oklass, gboo
 		if (m_class_is_valuetype (eoclass)) {
 			if ((eclass == mono_defaults.enum_class) || 
 			    (eclass == m_class_get_parent (mono_defaults.enum_class)) ||
-			    (eclass == mono_defaults.object_class)) {
+			    (!m_class_is_valuetype (eclass))) {
 				*result = FALSE;
 				return;
 			}
+		}
+
+		/* 
+		 * a is b does not imply a[] is b[] in the case where b is an interface and
+		 * a is a generic parameter, unless a has an additional class constraint.
+		 * For example (C#):
+		 * ```
+		 * interface I {}
+		 * class G<T> where T : I {}
+		 * class H<U> where U : class, I {}
+		 * public class P {
+		 *     public static void Main() {
+		 *         var t = typeof(G<>).GetTypeInfo().GenericTypeParameters[0].MakeArrayType();
+		 *         var i = typeof(I).MakeArrayType();
+		 *         var u = typeof(H<>).GetTypeInfo().GenericTypeParameters[0].MakeArrayType();
+		 *         Console.WriteLine("I[] assignable from T[] ? {0}", i.IsAssignableFrom(t));
+		 *         Console.WriteLine("I[] assignable from U[] ? {0}", i.IsAssignableFrom(u));
+		 *     }
+		 * }
+		 * ```
+		 * This should print:
+		 * I[] assignable from T[] ? False
+		 * I[] assignable from U[] ? True
+		 */
+
+		if (MONO_CLASS_IS_INTERFACE_INTERNAL (eclass)) {
+			MonoType *eoclass_byval_arg = m_class_get_byval_arg (eoclass);
+			if (mono_type_is_generic_argument (eoclass_byval_arg)) {
+				MonoGenericParam *eoparam = eoclass_byval_arg->data.generic_param;
+				MonoGenericParamInfo *eoinfo = mono_generic_param_info (eoparam);
+				int eomask = eoinfo->flags & GENERIC_PARAMETER_ATTRIBUTE_SPECIAL_CONSTRAINTS_MASK;
+				// check for class constraint
+				if ((eomask & GENERIC_PARAMETER_ATTRIBUTE_REFERENCE_TYPE_CONSTRAINT) == 0) {
+					*result = FALSE;
+					return;
+				}
+			}
+		}
+
+		if (mono_class_is_nullable (eclass) ^ mono_class_is_nullable (eoclass)) {
+			*result = FALSE;
+			return;
 		}
 
 		mono_class_is_assignable_from_checked (eclass, eoclass, result, error);
@@ -3888,7 +3868,10 @@ mono_class_is_assignable_from_checked (MonoClass *klass, MonoClass *oklass, gboo
 			mono_class_is_assignable_from_checked (m_class_get_cast_class (klass), oklass, result, error);
 		return;
 	} else if (klass == mono_defaults.object_class) {
-		*result = TRUE;
+		if (m_class_get_class_kind (oklass) == MONO_CLASS_POINTER)
+			*result = FALSE;
+		else
+			*result = TRUE;
 		return;
 	}
 
@@ -4072,6 +4055,8 @@ mono_generic_param_get_base_type (MonoClass *klass)
 	g_assert (mono_type_is_generic_argument (type));
 
 	MonoGenericParam *gparam = type->data.generic_param;
+
+	g_assert (gparam->owner && !gparam->owner->is_anonymous);
 
 	MonoClass **constraints = mono_generic_container_get_param_info (gparam->owner, gparam->num)->constraints;
 

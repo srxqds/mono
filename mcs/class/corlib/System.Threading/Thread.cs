@@ -53,7 +53,6 @@ namespace System.Threading {
 		// stores a thread handle
 		IntPtr handle;
 		IntPtr native_handle; // used only on Win32
-		IntPtr unused3;
 		/* accessed only from unmanaged code */
 		private IntPtr name;
 		private int name_len; 
@@ -83,7 +82,6 @@ namespace System.Threading {
 		internal int managed_id;
 		private int small_id;
 		private IntPtr manage_callback;
-		private IntPtr unused4;
 		private IntPtr flags;
 		private IntPtr thread_pinning_ref;
 		private IntPtr abort_protected_block_count;
@@ -91,12 +89,12 @@ namespace System.Threading {
 		private IntPtr owned_mutex;
 		private IntPtr suspended_event;
 		private int self_suspended;
-		/* 
-		 * These fields are used to avoid having to increment corlib versions
-		 * when a new field is added to the unmanaged MonoThread structure.
-		 */
-		private IntPtr unused1;
-		private IntPtr unused2;
+		private IntPtr thread_state;
+
+		// Unused fields to have same size as netcore.
+		private IntPtr netcore0;
+		private IntPtr netcore1;
+		private IntPtr netcore2;
 
 		/* This is used only to check that we are in sync between the representation
 		 * of MonoInternalThread in native and InternalThread in managed
@@ -166,11 +164,13 @@ namespace System.Threading {
 		private extern static byte[] ByteArrayToCurrentDomain (byte[] arr);
 
 #if !NETCORE
+#if !DISABLE_REMOTING
 		public static Context CurrentContext {
 			get {
 				return(AppDomain.InternalGetContext ());
 			}
 		}
+#endif
 
 #if !DISABLE_SECURITY
 		IPrincipal principal;
@@ -291,6 +291,11 @@ namespace System.Threading {
 
 				th.principal = value;
 			}
+		}
+#else
+		public static IPrincipal CurrentPrincipal {
+			get => throw new PlatformNotSupportedException ();
+			set => throw new PlatformNotSupportedException ();
 		}
 #endif
 

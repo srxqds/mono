@@ -33,6 +33,7 @@
 #include <mono/metadata/mono-debug.h>
 #include <mono/utils/mono-uri.h>
 #include <mono/metadata/mono-config.h>
+#include <mono/metadata/mono-config-internals.h>
 #include <mono/metadata/mono-config-dirs.h>
 #include <mono/utils/mono-digest.h>
 #include <mono/utils/mono-logger-internals.h>
@@ -74,8 +75,10 @@ default_path [] = {
 /* Contains the list of directories to be searched for assemblies (MONO_PATH) */
 static char **assemblies_path = NULL;
 
+#ifndef DISABLE_GAC
 /* Contains the list of directories that point to auxiliary GACs */
 static char **extra_gac_paths = NULL;
+#endif
 
 #ifndef DISABLE_DESKTOP_LOADER
 
@@ -303,7 +306,7 @@ static const AssemblyVersionMap framework_assemblies [] = {
 	FACADE_ASSEMBLY ("System.Threading.AccessControl"),
 	FACADE_ASSEMBLY ("System.Threading.Overlapped"),
 	FACADE_ASSEMBLY ("System.Threading.Tasks"),
-	{"System.Threading.Tasks.Dataflow", 0},
+	{"System.Threading.Tasks.Dataflow", 0, NULL, TRUE},
 	FACADE_ASSEMBLY ("System.Threading.Tasks.Extensions"),
 	FACADE_ASSEMBLY ("System.Threading.Tasks.Parallel"),
 	FACADE_ASSEMBLY ("System.Threading.Thread"),
@@ -346,9 +349,7 @@ static const AssemblyVersionMap framework_assemblies [] = {
 };
 #endif
 
-/*
- * keeps track of loaded assemblies
- */
+/* keeps track of loaded assemblies, excluding dynamic ones */
 static GList *loaded_assemblies = NULL;
 static MonoAssembly *corlib;
 
@@ -370,11 +371,11 @@ static GSList *loaded_assembly_bindings = NULL;
 /* Class lazy loading functions */
 static GENERATE_TRY_GET_CLASS_WITH_CACHE (internals_visible, "System.Runtime.CompilerServices", "InternalsVisibleToAttribute")
 static MonoAssembly*
-mono_assembly_invoke_search_hook_internal (MonoAssemblyName *aname, MonoAssembly *requesting, gboolean refonly, gboolean postload);
+mono_assembly_invoke_search_hook_internal (MonoAssemblyLoadContext *alc, MonoAssembly *requesting, MonoAssemblyName *aname, gboolean refonly, gboolean postload);
 static MonoAssembly*
 mono_assembly_request_byname_nosearch (MonoAssemblyName *aname, const MonoAssemblyByNameRequest *req, MonoImageOpenStatus *status);
 static MonoAssembly*
-mono_assembly_load_full_gac_base_default (MonoAssemblyName *aname, const char *basedir, MonoAssemblyContextKind asmctx, MonoImageOpenStatus *status);
+mono_assembly_load_full_gac_base_default (MonoAssemblyName *aname, const char *basedir, MonoAssemblyLoadContext *alc, MonoAssemblyContextKind asmctx, MonoImageOpenStatus *status);
 static MonoAssembly*
 chain_redirections_loadfrom (MonoImage *image, MonoImageOpenStatus *status);
 static MonoAssembly*
@@ -427,7 +428,7 @@ encode_public_tok (const guchar *token, gint32 len)
 gboolean
 mono_public_tokens_are_equal (const unsigned char *pubt1, const unsigned char *pubt2)
 {
-	return memcmp (pubt1, pubt2, 16) == 0;
+	return g_ascii_strncasecmp ((const char*) pubt1, (const char*) pubt2, 16) == 0;
 }
 
 /**
@@ -487,6 +488,7 @@ check_path_env (void)
 	g_free (path);
 }
 
+#ifndef DISABLE_GAC
 static void
 check_extra_gac_path_env (void) 
 {
@@ -520,6 +522,7 @@ check_extra_gac_path_env (void)
 		splitted++;
 	}
 }
+#endif /* DISABLE_GAC */
 
 static gboolean
 assembly_binding_maps_name (MonoAssemblyBindingInfo *info, MonoAssemblyName *aname)
@@ -1046,7 +1049,9 @@ mono_assemblies_init (void)
 		mono_set_rootdir ();
 
 	check_path_env ();
+#ifndef DISABLE_GAC
 	check_extra_gac_path_env ();
+#endif
 
 	mono_os_mutex_init_recursive (&assemblies_mutex);
 	mono_os_mutex_init (&assembly_binding_mutex);
@@ -1459,6 +1464,7 @@ mono_assembly_get_assemblyref (MonoImage *image, int index, MonoAssemblyName *an
 	}
 }
 
+#ifndef ENABLE_NETCORE
 static MonoAssembly*
 load_reference_by_aname_refonly_asmctx (MonoAssemblyName *aname, MonoAssembly *assm, MonoImageOpenStatus *status)
 {
@@ -1475,10 +1481,10 @@ load_reference_by_aname_refonly_asmctx (MonoAssemblyName *aname, MonoAssembly *a
 			req.basedir = assm->basedir;
 			reference = mono_assembly_request_byname (aname, &req, status);
 		} else {
-			reference = mono_assembly_loaded_full (aname, TRUE);
+			reference = mono_assembly_loaded_internal (NULL, aname, TRUE);
 			if (!reference)
 				/* Try a postload search hook */
-				reference = mono_assembly_invoke_search_hook_internal (aname, assm, TRUE, TRUE);
+				reference = mono_assembly_invoke_search_hook_internal (NULL, assm, aname, TRUE, TRUE);
 		}
 
 		/*
@@ -1492,7 +1498,7 @@ load_reference_by_aname_refonly_asmctx (MonoAssemblyName *aname, MonoAssembly *a
 }
 
 static MonoAssembly*
-load_reference_by_aname_default_asmctx (MonoAssemblyName *aname, MonoAssembly *assm, MonoImageOpenStatus *status)
+load_reference_by_aname_default_asmctx (MonoAssemblyName *aname, MonoAssemblyLoadContext *alc, MonoAssembly *assm, MonoImageOpenStatus *status)
 {
 	MonoAssembly *reference = NULL;
 	g_assert (status != NULL);
@@ -1506,11 +1512,13 @@ load_reference_by_aname_default_asmctx (MonoAssemblyName *aname, MonoAssembly *a
 		 */
 		MonoAssemblyByNameRequest req;
 		mono_assembly_request_prepare (&req.request, sizeof (req), MONO_ASMCTX_DEFAULT);
+		req.request.alc = alc;
 		req.requesting_assembly = assm;
 		reference = mono_assembly_request_byname (aname, &req, status);
 		if (!reference && assm) {
 			memset (&req, 0, sizeof (req));
 			req.request.asmctx = MONO_ASMCTX_DEFAULT;
+			req.request.alc = alc;
 			req.requesting_assembly = assm;
 			req.basedir = assm->basedir;
 			reference = mono_assembly_request_byname (aname, &req, status);
@@ -1551,7 +1559,7 @@ load_reference_by_aname_individual_asmctx (MonoAssemblyName *aname, MonoAssembly
 	aname = mono_assembly_remap_version (aname, &maped_aname);
 	aname = mono_assembly_apply_binding (aname, &maped_name_pp);
 
-	reference = mono_assembly_loaded_full (aname, FALSE);
+	reference = mono_assembly_loaded_internal (mono_domain_ambient_alc (mono_domain_get ()), aname, FALSE);
 	/* Still try to load from application base directory, MONO_PATH or the
 	 * GAC.  This is consistent with what .NET Framework (4.7) actually
 	 * does, rather than what the documentation implies: If `LoadFile` is
@@ -1571,6 +1579,74 @@ load_reference_by_aname_individual_asmctx (MonoAssemblyName *aname, MonoAssembly
 		reference = (MonoAssembly*)REFERENCE_MISSING;
 	return reference;
 }
+#else
+static MonoAssembly*
+netcore_load_reference (MonoAssemblyName *aname, MonoAssemblyLoadContext *alc, MonoAssembly *requesting, MonoImageOpenStatus *status)
+{
+	g_assert (status != NULL);
+	g_assert (requesting != NULL);
+	g_assert (alc != NULL);
+
+	MonoAssemblyName mapped_aname;
+	MonoAssemblyName mapped_name_pp;
+
+	aname = mono_assembly_remap_version (aname, &mapped_aname);
+	/* FIXME: netcore doesn't have binding redirects */
+	aname = mono_assembly_apply_binding (aname, &mapped_name_pp);
+
+	MonoAssembly *reference = NULL;
+
+	gboolean is_satellite = !mono_assembly_name_culture_is_neutral (aname);
+	gboolean is_default = mono_alc_is_default (alc);
+
+	/*
+	 * Try these until one of them succeeds (by returning a non-NULL reference):
+	 * 1. Check if it's already loaded by the ALC.
+	 * 2. If it's a non-default ALC, call the Load() method.
+	 *
+	 * 3. Try to load using the default ALC.
+	 *
+	 * 4. Call ALC Resolving event.
+	 *
+	 * 5. Return REFERNCE_MISSING
+	 */
+
+	reference = mono_assembly_loaded_internal (alc, aname, FALSE);
+	if (reference)
+		goto leave;
+
+	if (!is_default)
+		reference = mono_alc_invoke_resolve_using_load_nofail (alc, aname);
+	if (reference)
+		goto leave;
+
+	if (is_default || !is_satellite) {
+		MonoAssemblyByNameRequest req;
+		mono_assembly_request_prepare (&req.request, sizeof (req), MONO_ASMCTX_DEFAULT);
+		req.request.alc = mono_domain_default_alc (mono_alc_domain (alc));
+		req.requesting_assembly = requesting;
+		reference = mono_assembly_request_byname (aname, &req, status);
+		if (reference)
+			goto leave;
+	}
+
+	if (is_satellite) {
+		reference = mono_alc_invoke_resolve_using_resolve_satellite_nofail (alc, aname);
+		if (reference)
+			goto leave;
+	}
+
+	reference = mono_alc_invoke_resolve_using_resolving_event_nofail (alc, aname);
+	if (reference)
+		goto leave;
+
+	reference = (MonoAssembly*)REFERENCE_MISSING;
+
+leave:
+	return reference;
+}
+
+#endif /* ENABLE_NETCORE */
 
 /**
  * mono_assembly_get_assemblyref:
@@ -1655,9 +1731,10 @@ mono_assembly_load_reference (MonoImage *image, int index)
 				    aname_str);
 			g_free (aname_str);
 		}
+#ifndef ENABLE_NETCORE
 		switch (mono_asmctx_get_kind (&image->assembly->context)) {
 		case MONO_ASMCTX_DEFAULT:
-			reference = load_reference_by_aname_default_asmctx (&aname, image->assembly, &status);
+			reference = load_reference_by_aname_default_asmctx (&aname, mono_image_get_alc (image), image->assembly, &status);
 			break;
 		case MONO_ASMCTX_REFONLY:
 			reference = load_reference_by_aname_refonly_asmctx (&aname, image->assembly, &status);
@@ -1672,9 +1749,16 @@ mono_assembly_load_reference (MonoImage *image, int index)
 			g_error ("Unexpected assembly load context kind %d for image %s.", mono_asmctx_get_kind (&image->assembly->context), image->name);
 			break;
 		}
+#else
+		reference = netcore_load_reference (&aname, mono_image_get_alc (image), image->assembly, &status);
+#endif
 	} else {
+#ifndef ENABLE_NETCORE
 		/* FIXME: can we establish that image->assembly is never NULL and this code is dead? */
-		reference = load_reference_by_aname_default_asmctx (&aname, image->assembly, &status);
+		reference = load_reference_by_aname_default_asmctx (&aname, mono_image_get_alc (image), image->assembly, &status);
+#else
+		g_assertf (image->assembly, "While loading reference %d MonoImage %s doesn't have a MonoAssembly", index, image->name);
+#endif
 	}
 
 	if (reference == NULL){
@@ -1800,45 +1884,34 @@ free_assembly_load_hooks (void)
 typedef struct AssemblySearchHook AssemblySearchHook;
 struct AssemblySearchHook {
 	AssemblySearchHook *next;
-	MonoAssemblySearchFunc func;
+	union {
+		MonoAssemblySearchFunc v1;
+		MonoAssemblySearchFuncV2 v2;
+	} func;
 	gboolean refonly;
 	gboolean postload;
+	int version;
 	gpointer user_data;
 };
 
 static AssemblySearchHook *assembly_search_hook = NULL;
 
 static MonoAssembly*
-mono_assembly_invoke_search_hook_internal (MonoAssemblyName *aname, MonoAssembly *requesting, gboolean refonly, gboolean postload)
+mono_assembly_invoke_search_hook_internal (MonoAssemblyLoadContext *alc, MonoAssembly *requesting, MonoAssemblyName *aname, gboolean refonly, gboolean postload)
 {
 	AssemblySearchHook *hook;
 
 	for (hook = assembly_search_hook; hook; hook = hook->next) {
 		if ((hook->refonly == refonly) && (hook->postload == postload)) {
 			MonoAssembly *ass;
-			/**
-			  * A little explanation is in order here.
-			  *
-			  * The default postload search hook needs to know the requesting assembly to report it to managed code.
-			  * The embedding API exposes a search hook that doesn't take such argument.
-			  *
-			  * The original fix would call the default search hook before all the registered ones and pass
-			  * the requesting assembly to it. It works but broke a very suddle embedding API aspect that some users
-			  * rely on. Which is the ordering between user hooks and the default runtime hook.
-			  *
-			  * Registering the hook after mono_jit_init would let your hook run before the default one and
-			  * when using it to handle non standard app layouts this could save your app from a massive amount
-			  * of syscalls that the default hook does when probing all sorts of places. Slow targets with horrible IO
-			  * are all using this trick and if we broke this assumption they would be very disapointed at us.
-			  *
-			  * So what's the fix? We register the default hook using regular means and special case it when iterating
-			  * over the registered hooks. This preserves ordering and enables managed resolve hooks to get the requesting
-			  * assembly.
-			  */
-			if (hook->func == (void*)mono_domain_assembly_postload_search)
-				ass = mono_domain_assembly_postload_search (aname, requesting, refonly);
-			else
-				ass = hook->func (aname, hook->user_data);
+			if (hook->version == 1) {
+				ass = hook->func.v1 (aname, hook->user_data);
+			} else {
+				ERROR_DECL (hook_error);
+				g_assert (hook->version == 2);
+				ass = hook->func.v2 (alc, requesting, aname, refonly, postload, hook->user_data, hook_error);
+				mono_error_assert_ok (hook_error); /* FIXME: proper error handling */
+			}
 			if (ass)
 				return ass;
 		}
@@ -1853,18 +1926,35 @@ mono_assembly_invoke_search_hook_internal (MonoAssemblyName *aname, MonoAssembly
 MonoAssembly*
 mono_assembly_invoke_search_hook (MonoAssemblyName *aname)
 {
-	return mono_assembly_invoke_search_hook_internal (aname, NULL, FALSE, FALSE);
+	return mono_assembly_invoke_search_hook_internal (NULL, NULL, aname, FALSE, FALSE);
 }
 
 static void
-mono_install_assembly_search_hook_internal (MonoAssemblySearchFunc func, gpointer user_data, gboolean refonly, gboolean postload)
+mono_install_assembly_search_hook_internal_v1 (MonoAssemblySearchFunc func, gpointer user_data, gboolean refonly, gboolean postload)
 {
 	AssemblySearchHook *hook;
 	
 	g_return_if_fail (func != NULL);
 
 	hook = g_new0 (AssemblySearchHook, 1);
-	hook->func = func;
+	hook->version = 1;
+	hook->func.v1 = func;
+	hook->user_data = user_data;
+	hook->refonly = refonly;
+	hook->postload = postload;
+	hook->next = assembly_search_hook;
+	assembly_search_hook = hook;
+}
+
+void
+mono_install_assembly_search_hook_v2 (MonoAssemblySearchFuncV2 func, void *user_data, gboolean refonly, gboolean postload)
+{
+	if (func == NULL)
+		return;
+
+	AssemblySearchHook *hook = g_new0 (AssemblySearchHook, 1);
+	hook->version = 2;
+	hook->func.v2 = func;
 	hook->user_data = user_data;
 	hook->refonly = refonly;
 	hook->postload = postload;
@@ -1878,7 +1968,7 @@ mono_install_assembly_search_hook_internal (MonoAssemblySearchFunc func, gpointe
 void          
 mono_install_assembly_search_hook (MonoAssemblySearchFunc func, gpointer user_data)
 {
-	mono_install_assembly_search_hook_internal (func, user_data, FALSE, FALSE);
+	mono_install_assembly_search_hook_internal_v1 (func, user_data, FALSE, FALSE);
 }	
 
 static void
@@ -1898,7 +1988,7 @@ free_assembly_search_hooks (void)
 void
 mono_install_assembly_refonly_search_hook (MonoAssemblySearchFunc func, gpointer user_data)
 {
-	mono_install_assembly_search_hook_internal (func, user_data, TRUE, FALSE);
+	mono_install_assembly_search_hook_internal_v1 (func, user_data, TRUE, FALSE);
 }
 
 /**
@@ -1907,33 +1997,46 @@ mono_install_assembly_refonly_search_hook (MonoAssemblySearchFunc func, gpointer
 void          
 mono_install_assembly_postload_search_hook (MonoAssemblySearchFunc func, gpointer user_data)
 {
-	mono_install_assembly_search_hook_internal (func, user_data, FALSE, TRUE);
+	mono_install_assembly_search_hook_internal_v1 (func, user_data, FALSE, TRUE);
 }	
 
 void
 mono_install_assembly_postload_refonly_search_hook (MonoAssemblySearchFunc func, gpointer user_data)
 {
-	mono_install_assembly_search_hook_internal (func, user_data, TRUE, TRUE);
+	mono_install_assembly_search_hook_internal_v1 (func, user_data, TRUE, TRUE);
 }
+
 
 typedef struct AssemblyPreLoadHook AssemblyPreLoadHook;
 struct AssemblyPreLoadHook {
 	AssemblyPreLoadHook *next;
-	MonoAssemblyPreLoadFunc func;
+	union {
+		MonoAssemblyPreLoadFunc v1;
+		MonoAssemblyPreLoadFuncV2 v2;
+	} func;
 	gpointer user_data;
+	gint32 version;
 };
 
 static AssemblyPreLoadHook *assembly_preload_hook = NULL;
 static AssemblyPreLoadHook *assembly_refonly_preload_hook = NULL;
 
 static MonoAssembly *
-invoke_assembly_preload_hook (MonoAssemblyName *aname, gchar **apath)
+invoke_assembly_preload_hook (MonoAssemblyLoadContext *alc, MonoAssemblyName *aname, gchar **apath)
 {
 	AssemblyPreLoadHook *hook;
 	MonoAssembly *assembly;
 
 	for (hook = assembly_preload_hook; hook; hook = hook->next) {
-		assembly = hook->func (aname, apath, hook->user_data);
+		if (hook->version == 1)
+			assembly = hook->func.v1 (aname, apath, hook->user_data);
+		else {
+			ERROR_DECL (error);
+			g_assert (hook->version == 2);
+			assembly = hook->func.v2 (alc, aname, apath, FALSE, hook->user_data, error);
+			/* TODO: propagage error out to callers */
+			mono_error_assert_ok (error);
+		}
 		if (assembly != NULL)
 			return assembly;
 	}
@@ -1942,13 +2045,21 @@ invoke_assembly_preload_hook (MonoAssemblyName *aname, gchar **apath)
 }
 
 static MonoAssembly *
-invoke_assembly_refonly_preload_hook (MonoAssemblyName *aname, gchar **apath)
+invoke_assembly_refonly_preload_hook (MonoAssemblyLoadContext *alc, MonoAssemblyName *aname, gchar **apath)
 {
 	AssemblyPreLoadHook *hook;
 	MonoAssembly *assembly;
 
 	for (hook = assembly_refonly_preload_hook; hook; hook = hook->next) {
-		assembly = hook->func (aname, apath, hook->user_data);
+		if (hook->version == 1)
+			assembly = hook->func.v1 (aname, apath, hook->user_data);
+		else {
+			ERROR_DECL (error);
+			g_assert (hook->version == 2);
+			assembly = hook->func.v2 (alc, aname, apath, TRUE, hook->user_data, error);
+			/* TODO: propagate error out to callers */
+			mono_error_assert_ok (error);
+		}
 		if (assembly != NULL)
 			return assembly;
 	}
@@ -1967,7 +2078,8 @@ mono_install_assembly_preload_hook (MonoAssemblyPreLoadFunc func, gpointer user_
 	g_return_if_fail (func != NULL);
 
 	hook = g_new0 (AssemblyPreLoadHook, 1);
-	hook->func = func;
+	hook->version = 1;
+	hook->func.v1 = func;
 	hook->user_data = user_data;
 	hook->next = assembly_preload_hook;
 	assembly_preload_hook = hook;
@@ -1984,10 +2096,29 @@ mono_install_assembly_refonly_preload_hook (MonoAssemblyPreLoadFunc func, gpoint
 	g_return_if_fail (func != NULL);
 
 	hook = g_new0 (AssemblyPreLoadHook, 1);
-	hook->func = func;
+	hook->version = 1;
+	hook->func.v1 = func;
 	hook->user_data = user_data;
 	hook->next = assembly_refonly_preload_hook;
 	assembly_refonly_preload_hook = hook;
+}
+
+void
+mono_install_assembly_preload_hook_v2 (MonoAssemblyPreLoadFuncV2 func, gpointer user_data, gboolean refonly)
+{
+	AssemblyPreLoadHook *hook;
+
+	g_return_if_fail (func != NULL);
+
+	AssemblyPreLoadHook **hooks = refonly ? &assembly_refonly_preload_hook : &assembly_preload_hook;
+
+	hook = g_new0 (AssemblyPreLoadHook, 1);
+	hook->version = 2;
+	hook->func.v2 = func;
+	hook->user_data = user_data;
+	hook->next = *hooks;
+
+	*hooks = hook;
 }
 
 static void
@@ -2148,7 +2279,7 @@ absolute_dir (const gchar *filename)
  * returns NULL
  */
 MonoImage *
-mono_assembly_open_from_bundle (const char *filename, MonoImageOpenStatus *status, gboolean refonly)
+mono_assembly_open_from_bundle (MonoAssemblyLoadContext *alc, const char *filename, MonoImageOpenStatus *status, gboolean refonly)
 {
 	int i;
 	char *name;
@@ -2167,14 +2298,12 @@ mono_assembly_open_from_bundle (const char *filename, MonoImageOpenStatus *statu
 	is_satellite = g_str_has_suffix (lowercase_filename, ".resources.dll");
 	g_free (lowercase_filename);
 	name = g_path_get_basename (filename);
-	mono_assemblies_lock ();
 	for (i = 0; !image && bundles [i]; ++i) {
 		if (strcmp (bundles [i]->name, is_satellite ? filename : name) == 0) {
-			image = mono_image_open_from_data_internal ((char*)bundles [i]->data, bundles [i]->size, FALSE, status, refonly, FALSE, name);
+			image = mono_image_open_from_data_internal (alc, (char*)bundles [i]->data, bundles [i]->size, FALSE, status, refonly, FALSE, name);
 			break;
 		}
 	}
-	mono_assemblies_unlock ();
 	if (image) {
 		mono_image_addref (image);
 		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Assembly Loader loaded assembly from bundle: '%s'.", is_satellite ? filename : name);
@@ -2335,12 +2464,12 @@ mono_assembly_request_open (const char *filename, const MonoAssemblyOpenRequest 
 	// If VM built with mkbundle
 	loaded_from_bundle = FALSE;
 	if (bundles != NULL) {
-		image = mono_assembly_open_from_bundle (fname, status, refonly);
+		image = mono_assembly_open_from_bundle (load_req.alc, fname, status, refonly);
 		loaded_from_bundle = image != NULL;
 	}
 
 	if (!image)
-		image = mono_image_open_a_lot (fname, status, refonly, load_from_context);
+		image = mono_image_open_a_lot (load_req.alc, fname, status, refonly, load_from_context);
 
 	if (!image){
 		if (*status == MONO_IMAGE_OK)
@@ -2393,7 +2522,7 @@ mono_assembly_request_open (const char *filename, const MonoAssemblyOpenRequest 
 			mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY,
 				"Assembly Loader loaded assembly from location: '%s'.", filename);
 		if (!refonly)
-			mono_config_for_assembly (ass->image);
+			mono_config_for_assembly_internal (ass->image);
 	}
 
 	/* Clear the reference added by mono_image_open */
@@ -2845,7 +2974,7 @@ mono_assembly_request_load_from (MonoImage *image, const char *fname,
 	 */
 	if (ass->aname.name && asmctx != MONO_ASMCTX_INDIVIDUAL) {
 		/* FIXME: I think individual context should probably also look for an existing MonoAssembly here, we just need to pass the asmctx to the search hook so that it does a filename match (I guess?) */
-		ass2 = mono_assembly_invoke_search_hook_internal (&ass->aname, NULL, asmctx == MONO_ASMCTX_REFONLY, FALSE);
+		ass2 = mono_assembly_invoke_search_hook_internal (req->alc, NULL, &ass->aname, asmctx == MONO_ASMCTX_REFONLY, FALSE);
 		if (ass2) {
 			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_ASSEMBLY, "Image %s[%p] reusing existing assembly %s[%p]", ass->aname.name, ass, ass2->aname.name, ass2);
 			g_free (ass);
@@ -3517,6 +3646,12 @@ mono_assembly_name_get_version (MonoAssemblyName *aname, uint16_t *minor, uint16
 	return aname->major;
 }
 
+gboolean
+mono_assembly_name_culture_is_neutral (const MonoAssemblyName *aname)
+{
+	return (!aname->culture || aname->culture [0] == 0);
+}
+
 static MonoAssembly*
 probe_for_partial_name (const char *basepath, const char *fullname, MonoAssemblyName *aname, MonoImageOpenStatus *status)
 {
@@ -3627,8 +3762,6 @@ mono_assembly_load_with_partial_name_internal (const char *name, MonoImageOpenSt
 	MonoAssembly *res;
 	MonoAssemblyName *aname, base_name;
 	MonoAssemblyName mapped_aname;
-	gchar *fullname, *gacpath;
-	gchar **paths;
 
 	MONO_REQ_GC_UNSAFE_MODE;
 
@@ -3647,19 +3780,25 @@ mono_assembly_load_with_partial_name_internal (const char *name, MonoImageOpenSt
 	if ((aname->major | aname->minor | aname->build | aname->revision) == 0)
 		aname = mono_assembly_remap_version (aname, &mapped_aname);
 	
-	res = mono_assembly_loaded_full (aname, FALSE);
+	/* FIXME: get the ALC as an argument from the caller */
+	MonoAssemblyLoadContext *alc = mono_domain_ambient_alc (mono_domain_get ());
+
+	res = mono_assembly_loaded_internal (alc, aname, FALSE);
 	if (res) {
 		mono_assembly_name_free (aname);
 		return res;
 	}
 
-	res = invoke_assembly_preload_hook (aname, assemblies_path);
+	res = invoke_assembly_preload_hook (alc, aname, assemblies_path);
 	if (res) {
 		res->in_gac = FALSE;
 		mono_assembly_name_free (aname);
 		return res;
 	}
 
+#ifndef DISABLE_GAC
+	gchar *fullname, *gacpath;
+	gchar **paths;
 	fullname = g_strdup_printf ("%s.dll", aname->name);
 
 	if (extra_gac_paths) {
@@ -3684,11 +3823,13 @@ mono_assembly_load_with_partial_name_internal (const char *name, MonoImageOpenSt
 	g_free (gacpath);
 
 	g_free (fullname);
-	mono_assembly_name_free (aname);
-
 	if (res)
 		res->in_gac = TRUE;
-	else {
+#endif
+
+	mono_assembly_name_free (aname);
+
+	if (!res) {
 		MonoDomain *domain = mono_domain_get ();
 
 		res = mono_try_assembly_resolve (domain, name, NULL, FALSE, error);
@@ -3705,6 +3846,7 @@ mono_assembly_load_with_partial_name_internal (const char *name, MonoImageOpenSt
 static MonoBoolean
 mono_assembly_is_in_gac (const gchar *filename)
 {
+#ifndef DISABLE_GAC
 	const gchar *rootdir;
 	gchar *gp;
 	gchar **paths;
@@ -3761,12 +3903,16 @@ mono_assembly_is_in_gac (const gchar *filename)
 	if (*gp != G_DIR_SEPARATOR)
 		return FALSE;
 	return TRUE;
+#else
+	return FALSE;
+#endif /* DISABLE_GAC */
 }
 
 static MonoImage*
 mono_assembly_load_publisher_policy (MonoAssemblyName *aname)
 {
-	MonoImage *image;
+	MonoImage *image = NULL;
+#ifndef DISABLE_GAC
 	gchar *filename, *pname, *name, *culture, *version, *fullpath, *subpath;
 	gchar **paths;
 	gint32 len;
@@ -3817,6 +3963,7 @@ mono_assembly_load_publisher_policy (MonoAssemblyName *aname)
 	image = mono_image_open (fullpath, NULL);
 	g_free (subpath);
 	g_free (fullpath);
+#endif
 	
 	return image;
 }
@@ -4106,6 +4253,7 @@ exit:
 	HANDLE_FUNCTION_RETURN_VAL (result);
 }
 
+#ifndef DISABLE_GAC
 /**
  * mono_assembly_load_from_gac
  *
@@ -4181,6 +4329,7 @@ mono_assembly_load_from_gac (MonoAssemblyName *aname,  gchar *filename, MonoImag
 
 	return result;
 }
+#endif /* DISABLE_GAC */
 
 MonoAssembly*
 mono_assembly_load_corlib (const MonoRuntimeInfo *runtime, MonoImageOpenStatus *status)
@@ -4194,9 +4343,11 @@ mono_assembly_load_corlib (const MonoRuntimeInfo *runtime, MonoImageOpenStatus *
 		return corlib;
 	}
 
+	req.request.alc = mono_domain_default_alc (mono_domain_get ());
+
 #ifdef ENABLE_NETCORE
 	aname = mono_assembly_name_new (MONO_ASSEMBLY_CORLIB_NAME);
-	corlib = invoke_assembly_preload_hook (aname, NULL);
+	corlib = invoke_assembly_preload_hook (req.request.alc, aname, NULL);
 	/* MonoCore preload hook should know how to find it */
 	/* FIXME: AOT compiler comes here without an installed hook. */
 	if (!corlib) {
@@ -4209,7 +4360,7 @@ mono_assembly_load_corlib (const MonoRuntimeInfo *runtime, MonoImageOpenStatus *
 #else
 	// A nonstandard preload hook may provide a special mscorlib assembly
 	aname = mono_assembly_name_new ("mscorlib.dll");
-	corlib = invoke_assembly_preload_hook (aname, assemblies_path);
+	corlib = invoke_assembly_preload_hook (req.request.alc, aname, assemblies_path);
 	mono_assembly_name_free (aname);
 	g_free (aname);
 	if (corlib != NULL)
@@ -4296,7 +4447,7 @@ gboolean
 exact_sn_match (MonoAssemblyName *wanted_name, MonoAssemblyName *candidate_name)
 {
 #if ENABLE_NETCORE
-	gboolean result = mono_assembly_names_equal_flags (wanted_name, candidate_name, MONO_ANAME_EQ_IGNORE_VERSION);
+	gboolean result = mono_assembly_names_equal_flags (wanted_name, candidate_name, MONO_ANAME_EQ_IGNORE_VERSION | MONO_ANAME_EQ_IGNORE_PUBKEY);
 	if (result && assembly_names_compare_versions (wanted_name, candidate_name, -1) > 0)
 		result = FALSE;
 #else
@@ -4360,17 +4511,18 @@ mono_assembly_request_byname_nosearch (MonoAssemblyName *aname,
 	if (!refonly)
 		aname = mono_assembly_apply_binding (aname, &maped_name_pp);
 
-	result = mono_assembly_loaded_full (aname, refonly);
+	result = mono_assembly_loaded_internal (req->request.alc, aname, refonly);
 	if (result)
 		return result;
 
-	result = refonly ? invoke_assembly_refonly_preload_hook (aname, assemblies_path) : invoke_assembly_preload_hook (aname, assemblies_path);
+	result = refonly ? invoke_assembly_refonly_preload_hook (req->request.alc, aname, assemblies_path) : invoke_assembly_preload_hook (req->request.alc, aname, assemblies_path);
 	if (result) {
 		result->in_gac = FALSE;
 		return result;
 	}
 
-	return mono_assembly_load_full_gac_base_default (aname, req->basedir, req->request.asmctx, status);
+	/* TODO: for netcore can we avoid calling this method?  There is no GAC and we also shouldn't need to load anything from the default path */
+	return mono_assembly_load_full_gac_base_default (aname, req->basedir, req->request.alc, req->request.asmctx, status);
 }
 
 /* Like mono_assembly_request_byname_nosearch, but don't ask the preload look (ie,
@@ -4381,6 +4533,7 @@ mono_assembly_request_byname_nosearch (MonoAssemblyName *aname,
 MonoAssembly*
 mono_assembly_load_full_gac_base_default (MonoAssemblyName *aname,
 					  const char *basedir,
+					  MonoAssemblyLoadContext *alc,
 					  MonoAssemblyContextKind asmctx,
 					  MonoImageOpenStatus *status)
 {
@@ -4416,10 +4569,9 @@ mono_assembly_load_full_gac_base_default (MonoAssemblyName *aname,
 	}
 #endif
 
-	const gboolean refonly = asmctx == MONO_ASMCTX_REFONLY;
-
 	MonoAssemblyOpenRequest req;
 	mono_assembly_request_prepare (&req.request, sizeof (req), asmctx);
+	req.request.alc = alc;
 	req.request.predicate = predicate;
 	req.request.predicate_ud = predicate_ud;
 
@@ -4434,11 +4586,15 @@ mono_assembly_load_full_gac_base_default (MonoAssemblyName *aname,
 			filename = g_strconcat (aname->name, ext, NULL);
 		}
 
+#ifndef DISABLE_GAC
+		const gboolean refonly = asmctx == MONO_ASMCTX_REFONLY;
+
 		result = mono_assembly_load_from_gac (aname, filename, status, refonly);
 		if (result) {
 			g_free (filename);
 			return result;
 		}
+#endif
 
 		if (basedir) {
 			fullpath = g_build_filename (basedir, filename, NULL);
@@ -4465,12 +4621,14 @@ mono_assembly_load_full_gac_base_default (MonoAssemblyName *aname,
 MonoAssembly*
 mono_assembly_request_byname (MonoAssemblyName *aname, const MonoAssemblyByNameRequest *req, MonoImageOpenStatus *status)
 {
+	MonoDomain *domain = mono_domain_get ();
+	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_ASSEMBLY, "Request to load %s in (domain %p, alc %p)", aname->name, domain, (gpointer)req->request.alc);
 	MonoAssembly *result = mono_assembly_request_byname_nosearch (aname, req, status);
 	const gboolean refonly = req->request.asmctx == MONO_ASMCTX_REFONLY;
 
 	if (!result && !req->no_postload_search) {
 		/* Try a postload search hook */
-		result = mono_assembly_invoke_search_hook_internal (aname, req->requesting_assembly, refonly, TRUE);
+		result = mono_assembly_invoke_search_hook_internal (req->request.alc, req->requesting_assembly, aname, refonly, TRUE);
 		result = prevent_reference_assembly_from_running (result, refonly);
 	}
 	return result;
@@ -4524,6 +4682,7 @@ mono_assembly_load (MonoAssemblyName *aname, const char *basedir, MonoImageOpenS
 	MonoAssemblyByNameRequest req;
 	mono_assembly_request_prepare (&req.request, sizeof (req), MONO_ASMCTX_DEFAULT);
 	req.requesting_assembly = NULL;
+	req.request.alc = mono_domain_default_alc (mono_domain_get ());
 	req.basedir = basedir;
 	return mono_assembly_request_byname (aname, &req, status);
 }
@@ -4540,12 +4699,19 @@ mono_assembly_load (MonoAssemblyName *aname, const char *basedir, MonoImageOpenS
 MonoAssembly*
 mono_assembly_loaded_full (MonoAssemblyName *aname, gboolean refonly)
 {
+	MonoAssemblyLoadContext *alc = mono_domain_ambient_alc (mono_domain_get ());
+	return mono_assembly_loaded_internal (alc, aname, refonly);
+}
+
+MonoAssembly *
+mono_assembly_loaded_internal (MonoAssemblyLoadContext *alc, MonoAssemblyName *aname, gboolean refonly)
+{
 	MonoAssembly *res;
 	MonoAssemblyName maped_aname;
 
 	aname = mono_assembly_remap_version (aname, &maped_aname);
 
-	res = mono_assembly_invoke_search_hook_internal (aname, NULL, refonly, FALSE);
+	res = mono_assembly_invoke_search_hook_internal (alc, NULL, aname, refonly, FALSE);
 
 	return res;
 }
@@ -4564,7 +4730,7 @@ mono_assembly_loaded (MonoAssemblyName *aname)
 {
 	MonoAssembly *res;
 	MONO_ENTER_GC_UNSAFE;
-	res = mono_assembly_loaded_full (aname, FALSE);
+	res = mono_assembly_loaded_internal (mono_domain_ambient_alc (mono_domain_get ()), aname, FALSE);
 	MONO_EXIT_GC_UNSAFE;
 	return res;
 }

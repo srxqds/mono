@@ -1533,6 +1533,14 @@ print_implemented_interfaces (MonoClass *klass)
 	}
 }
 
+static gboolean 
+method_is_reabstracted (guint16 flags)
+{
+	if ((flags & METHOD_ATTRIBUTE_ABSTRACT && flags & METHOD_ATTRIBUTE_FINAL))
+		return TRUE;
+	return FALSE;
+}
+
 /*
  * Return the number of virtual methods.
  * Even for interfaces we can't simply return the number of methods as all CLR types are allowed to have static methods.
@@ -1554,8 +1562,11 @@ count_virtual_methods (MonoClass *klass)
 		mcount = mono_class_get_method_count (klass);
 		for (i = 0; i < mcount; ++i) {
 			flags = klass->methods [i]->flags;
-			if (flags & METHOD_ATTRIBUTE_VIRTUAL)
+			if ((flags & METHOD_ATTRIBUTE_VIRTUAL)) {
+				if (method_is_reabstracted (flags))
+					continue;
 				++vcount;
+			}
 		}
 	} else {
 		int first_idx = mono_class_get_first_method_idx (klass);
@@ -1563,8 +1574,11 @@ count_virtual_methods (MonoClass *klass)
 		for (i = 0; i < mcount; ++i) {
 			flags = mono_metadata_decode_table_row_col (klass->image, MONO_TABLE_METHOD, first_idx + i, MONO_METHOD_FLAGS);
 
-			if (flags & METHOD_ATTRIBUTE_VIRTUAL)
+			if ((flags & METHOD_ATTRIBUTE_VIRTUAL)) {
+				if (method_is_reabstracted (flags))
+					continue;
 				++vcount;
+			}
 		}
 	}
 	return vcount;
@@ -1695,27 +1709,6 @@ mono_class_interface_match (const uint8_t *bitmap, int id)
 	}
 }
 #endif
-
-typedef struct {
-	MonoClass *ic;
-	int offset;
-	int insertion_order;
-} ClassAndOffset;
-
-static int
-compare_by_interface_id (const void *a, const void *b)
-{
-	const ClassAndOffset *ca = (const ClassAndOffset*)a;
-	const ClassAndOffset *cb = (const ClassAndOffset*)b;
-
-	/* Sort on interface_id, but keep equal elements in the same relative
-	 * order. */
-	int primary_order = ca->ic->interface_id - cb->ic->interface_id;
-	if (primary_order != 0)
-		return primary_order;
-	else
-		return ca->insertion_order - cb->insertion_order;
-}
 
 /*
  * Return -1 on failure and set klass->has_failure and store a MonoErrorBoxed with the details.
@@ -2037,13 +2030,10 @@ print_method_signatures (MonoMethod *im, MonoMethod *cm) {
 static gboolean
 is_wcf_hack_disabled (void)
 {
-	static gboolean disabled;
-	static gboolean inited = FALSE;
-	if (!inited) {
-		disabled = g_hasenv ("MONO_DISABLE_WCF_HACK");
-		inited = TRUE;
-	}
-	return disabled;
+	static char disabled;
+	if (!disabled)
+		disabled = g_hasenv ("MONO_DISABLE_WCF_HACK") ? 1 : 2;
+	return disabled == 1;
 }
 
 static gboolean
@@ -3164,6 +3154,7 @@ mono_class_setup_vtable_general (MonoClass *klass, MonoMethod **overrides, int o
 	// it can happen (for injected generic array interfaces) that the same slot is
 	// processed multiple times (those interfaces have overlapping slots), and it
 	// will not always be the first pass the one that fills the slot.
+	// Now it is okay to implement a class that is not abstract and implements a interface that has an abstract method because it's reabstracted
 	if (!mono_class_is_abstract (klass)) {
 		for (i = 0; i < klass->interface_offsets_count; i++) {
 			int ic_offset;
@@ -3178,6 +3169,8 @@ mono_class_setup_vtable_general (MonoClass *klass, MonoMethod **overrides, int o
 				int im_slot = ic_offset + im->slot;
 				
 				if (im->flags & METHOD_ATTRIBUTE_STATIC)
+					continue;
+				if (im->is_reabstracted == 1)
 					continue;
 
 				TRACE_INTERFACE_VTABLE (printf ("      [class is not abstract, checking slot %d for interface '%s'.'%s', method %s, slot check is %d]\n",
@@ -3316,9 +3309,12 @@ mono_class_setup_vtable_general (MonoClass *klass, MonoMethod **overrides, int o
 	g_assert (cur_slot <= max_vtsize);
 
 	/* Ensure that all vtable slots are filled with concrete instance methods */
+	// Now it is okay to implement a class that is not abstract and implements a interface that has an abstract method because it's reabstracted
 	if (!mono_class_is_abstract (klass)) {
 		for (i = 0; i < cur_slot; ++i) {
 			if (vtable [i] == NULL || (vtable [i]->flags & (METHOD_ATTRIBUTE_ABSTRACT | METHOD_ATTRIBUTE_STATIC))) {
+				if (vtable [i]->is_reabstracted == 1)
+					continue;
 				char *type_name = mono_type_get_full_name (klass);
 				char *method_name = vtable [i] ? mono_method_full_name (vtable [i], TRUE) : g_strdup ("none");
 				mono_class_set_type_load_failure (klass, "Type %s has invalid vtable method slot %d with method %s", type_name, i, method_name);
@@ -3484,6 +3480,56 @@ type_has_references (MonoClass *klass, MonoType *ftype)
 	return FALSE;
 }
 
+/**
+ * mono_class_is_gparam_with_nonblittable_parent:
+ * \param klass  a generic parameter
+ *
+ * \returns TRUE if \p klass is definitely not blittable.
+ *
+ * A parameter is definitely not blittable if it has the IL 'reference'
+ * constraint, or if it has a class specified as a parent.  If it has an IL
+ * 'valuetype' constraint or no constraint at all or only interfaces as
+ * constraints, we return FALSE because the parameter may be instantiated both
+ * with blittable and non-blittable types.
+ *
+ * If the paramter is a generic sharing parameter, we look at its gshared_constraint->blittable bit.
+ */
+static gboolean
+mono_class_is_gparam_with_nonblittable_parent (MonoClass *klass)
+{
+	MonoType *type = m_class_get_byval_arg (klass);
+	g_assert (mono_type_is_generic_parameter (type));
+	MonoGenericParam *gparam = type->data.generic_param;
+	if ((mono_generic_param_info (gparam)->flags & GENERIC_PARAMETER_ATTRIBUTE_REFERENCE_TYPE_CONSTRAINT) != 0)
+		return TRUE;
+	if ((mono_generic_param_info (gparam)->flags & GENERIC_PARAMETER_ATTRIBUTE_VALUE_TYPE_CONSTRAINT) != 0)
+		return FALSE;
+
+	if (gparam->gshared_constraint) {
+		MonoClass *constraint_class = mono_class_from_mono_type_internal (gparam->gshared_constraint);
+		return !m_class_is_blittable (constraint_class);
+	}
+
+	if (mono_generic_param_owner (gparam)->is_anonymous)
+		return FALSE;
+
+	/* We could have:  T : U,  U : Base.  So have to follow the constraints. */
+	MonoClass *parent_class = mono_generic_param_get_base_type (klass);
+	g_assert (!MONO_CLASS_IS_INTERFACE_INTERNAL (parent_class));
+	/* Parent can only be: System.Object, System.ValueType or some specific base class.
+	 *
+	 * If the parent_class is ValueType, the valuetype constraint would be set, above, so
+	 * we wouldn't get here.
+	 *
+	 * If there was a reference constraint, the parent_class would be System.Object,
+	 * but we would have returned early above.
+	 *
+	 * So if we get here, there is either no base class constraint at all,
+	 * in which case parent_class would be set to System.Object, or there is none at all.
+	 */
+	return parent_class != mono_defaults.object_class;
+}
+
 /*
  * mono_class_layout_fields:
  * @class: a class
@@ -3595,6 +3641,9 @@ mono_class_layout_fields (MonoClass *klass, int base_instance_size, int packing_
 			continue;
 		if (blittable) {
 			if (field->type->byref || MONO_TYPE_IS_REFERENCE (field->type)) {
+				blittable = FALSE;
+			} else if (mono_type_is_generic_parameter (field->type) &&
+				   mono_class_is_gparam_with_nonblittable_parent (mono_class_from_mono_type_internal (field->type))) {
 				blittable = FALSE;
 			} else {
 				MonoClass *field_class = mono_class_from_mono_type_internal (field->type);
@@ -4997,7 +5046,13 @@ mono_class_setup_methods (MonoClass *klass)
 		/*Only assign slots to virtual methods as interfaces are allowed to have static methods.*/
 		for (i = 0; i < count; ++i) {
 			if (methods [i]->flags & METHOD_ATTRIBUTE_VIRTUAL)
+			{
+				if (method_is_reabstracted (methods[i]->flags)) {
+					methods [i]->is_reabstracted = 1;
+					continue;
+				}
 				methods [i]->slot = slot++;
+			}
 		}
 	}
 
@@ -5594,18 +5649,14 @@ MonoClass *
 mono_class_create_array_fill_type (void)
 {
 	static MonoClass klass;
-	static gboolean inited = FALSE;
 
-	if (!inited) {
-		klass.element_class = mono_defaults.int64_class;
-		klass.rank = 1;
-		klass.instance_size = MONO_SIZEOF_MONO_ARRAY;
-		klass.sizes.element_size = 8;
-		klass.size_inited = 1;
-		klass.name = "array_filler_type";
+	klass.element_class = mono_defaults.int64_class;
+	klass.rank = 1;
+	klass.instance_size = MONO_SIZEOF_MONO_ARRAY;
+	klass.sizes.element_size = 8;
+	klass.size_inited = 1;
+	klass.name = "array_filler_type";
 
-		inited = TRUE;
-	}
 	return &klass;
 }
 

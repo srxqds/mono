@@ -1482,6 +1482,7 @@
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.DisablePrivateReflectionAttribute))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.DiscardableAttribute))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.DynamicAttribute))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.EnumeratorCancellationAttribute))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.ExtensionAttribute))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.FixedAddressValueTypeAttribute))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.FixedBufferAttribute))]
@@ -2099,8 +2100,15 @@
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Transactions.TransactionScopeOption))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Transactions.TransactionStartedEventHandler))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Transactions.TransactionStatus))]
+#endif
+
+#if SYSTEM_WEB_IMPLEMENTATION
+// Implementation is included in .sources
+#else
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Web.HttpUtility))]
 #endif
+
+
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Windows.Input.ICommand))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Xml.ConformanceLevel))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Xml.DtdProcessing))]
@@ -2443,8 +2451,13 @@
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Buffers.Text.Utf8Parser))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Collections.Generic.CollectionExtensions))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Collections.Generic.KeyValuePair))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Diagnostics.Tracing.DiagnosticCounter))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Diagnostics.Tracing.EventSourceCreatedEventArgs))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Diagnostics.Tracing.IncrementingEventCounter))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Diagnostics.Tracing.IncrementingPollingCounter))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Diagnostics.Tracing.PollingCounter))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Drawing.KnownColor))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Data.DataReaderExtensions))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Data.Common.DbProviderFactories))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Drawing.ColorConverter))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Drawing.PointConverter))]
@@ -2507,6 +2520,7 @@
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Reflection.Emit.SignatureToken))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Reflection.Emit.StringToken))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Reflection.Emit.TypeToken))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.AmbiguousImplementationException))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.AsyncMethodBuilderAttribute))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.AsyncValueTaskMethodBuilder))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.CompilerServices.AsyncValueTaskMethodBuilder<>))]
@@ -2533,8 +2547,12 @@
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.InteropServices.TypeLibVersionAttribute))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Runtime.Serialization.Formatters.IFieldInfo))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.SequencePosition))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.AesCcm))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.AesGcm))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.CryptographicOperations))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.ECDiffieHellman))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.PbeParameters))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.PbeEncryptionAlgorithm))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Xml.Serialization.SchemaImporter))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.X509Certificates.CertificateRequest))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Security.Cryptography.X509Certificates.DSACertificateExtensions))]
@@ -2546,4 +2564,5 @@
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Threading.Tasks.Sources.IValueTaskSource<>))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Threading.Tasks.Sources.ValueTaskSourceOnCompletedFlags))]
 [assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Threading.Tasks.Sources.ValueTaskSourceStatus))]
+[assembly:System.Runtime.CompilerServices.TypeForwardedTo(typeof(System.Threading.Tasks.TaskAsyncEnumerableExtensions))]
 #endif

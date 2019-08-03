@@ -113,7 +113,7 @@ typedef enum {
 	WRAPPER_SUBTYPE_RUNTIME_INVOKE_DIRECT,
 	WRAPPER_SUBTYPE_RUNTIME_INVOKE_VIRTUAL,
 	/* Subtypes of MONO_WRAPPER_MANAGED_TO_NATIVE */
-	WRAPPER_SUBTYPE_ICALL_WRAPPER,
+	WRAPPER_SUBTYPE_ICALL_WRAPPER, // specifically JIT icalls
 	WRAPPER_SUBTYPE_NATIVE_FUNC_AOT,
 	WRAPPER_SUBTYPE_PINVOKE,
 	/* Subtypes of MONO_WRAPPER_OTHER */
@@ -174,7 +174,7 @@ typedef struct {
 } GenericArrayHelperWrapperInfo;
 
 typedef struct {
-	gpointer func;
+	MonoJitICallId jit_icall_id;
 } ICallWrapperInfo;
 
 typedef struct {
@@ -375,6 +375,9 @@ mono_marshal_ftnptr_eh_callback (guint32 gchandle);
 
 MONO_PAL_API void
 mono_marshal_set_last_error (void);
+
+void
+mono_marshal_clear_last_error (void);
 
 guint
 mono_type_to_ldind (MonoType *type);
@@ -595,10 +598,6 @@ ves_icall_System_Runtime_InteropServices_Marshal_FreeHGlobal (void *ptr);
 ICALL_EXPORT
 void
 ves_icall_System_Runtime_InteropServices_Marshal_FreeBSTR (mono_bstr_const ptr);
-
-ICALL_EXPORT
-void*
-ves_icall_System_Runtime_InteropServices_Marshal_UnsafeAddrOfPinnedArrayElement (MonoArray *arrayobj, int index);
 
 ICALL_EXPORT
 int

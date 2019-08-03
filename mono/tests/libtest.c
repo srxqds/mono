@@ -1253,6 +1253,14 @@ mono_test_marshal_stringbuilder_ref (char **s)
 	return 0;
 }
 
+LIBTEST_API void STDCALL  
+mono_test_marshal_stringbuilder_utf16_tolower (short *s, int n)
+{
+	for (int i = 0; i < n; i++)
+		s[i] = tolower(s[i]);
+}
+
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wc++-compat"
@@ -3381,6 +3389,7 @@ typedef struct
 	int (STDCALL *ITestIn)(MonoComObject* pUnk, MonoComObject* pUnk2);
 	int (STDCALL *ITestOut)(MonoComObject* pUnk, MonoComObject* *ppUnk);
 	int (STDCALL *Return22NoICall)(MonoComObject* pUnk);
+	int (STDCALL *IntOut)(MonoComObject* pUnk, int *a);
 } MonoIUnknown;
 
 struct MonoComObject
@@ -3504,6 +3513,11 @@ Return22NoICall(MonoComObject* pUnk)
 	return 22;
 }
 
+LIBTEST_API int STDCALL
+IntOut(MonoComObject* pUnk, int *a)
+{
+	return S_OK;
+}
 
 static void create_com_object (MonoComObject** pOut);
 
@@ -3537,6 +3551,7 @@ static void create_com_object (MonoComObject** pOut)
 	(*pOut)->vtbl->ITestOut = ITestOut;
 	(*pOut)->vtbl->get_ITest = get_ITest;
 	(*pOut)->vtbl->Return22NoICall = Return22NoICall;
+	(*pOut)->vtbl->IntOut = IntOut;
 }
 
 static MonoComObject* same_object = NULL;
@@ -3643,6 +3658,29 @@ mono_test_marshal_array_ccw_itest (int count, MonoComObject ** ppUnk)
 	hr = ppUnk[0]->vtbl->SByteIn (ppUnk[0], -100);
 	if (hr != 0)
 		return 4;
+
+	return 0;
+}
+
+LIBTEST_API int STDCALL
+mono_test_marshal_retval_ccw_itest (MonoComObject *pUnk, int test_null)
+{
+	int hr = 0, i = 0;
+
+	if (!pUnk)
+		return 1;
+
+	hr = pUnk->vtbl->IntOut (pUnk, &i);
+	if (hr != 0)
+		return 2;
+	if (i != 33)
+		return 3;
+	if (test_null)
+	{
+		hr = pUnk->vtbl->IntOut (pUnk, NULL);
+		if (hr != 0)
+			return 4;
+	}
 
 	return 0;
 }
@@ -5701,6 +5739,18 @@ __thiscall
 _mono_test_native_thiscall3 (int arg, int arg2, int arg3)
 {
 	return arg + (arg2^1) + (arg3^2);
+}
+
+typedef int (
+#ifndef _MSC_VER
+__thiscall
+#endif
+*ThiscallFunction)(int arg, int arg2);
+
+LIBTEST_API ThiscallFunction STDCALL
+mono_test_get_native_thiscall2 (void)
+{
+	return _mono_test_native_thiscall2;
 }
 
 LIBTEST_API int STDCALL

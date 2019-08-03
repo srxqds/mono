@@ -46,11 +46,6 @@ mono_arch_register_lowlevel_calls (void)
 }
 
 void
-mono_arch_free_jit_tls_data (MonoJitTlsData *tls)
-{
-}
-
-void
 mono_arch_cleanup (void)
 {
 }
@@ -688,3 +683,9 @@ mono_arch_get_seq_point_info (MonoDomain *domain, guint8 *code)
 	return NULL;
 }
 #endif /* MONO_ARCH_SOFT_DEBUG_SUPPORTED */
+
+gpointer
+mono_arch_load_function (MonoJitICallId jit_icall_id)
+{
+	return NULL;
+}

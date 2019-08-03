@@ -6,6 +6,7 @@
   <ItemGroup Label="common_sources">
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\abi.c" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\appdomain.c" />
+    <ClCompile Include="$(MonoSourceLocation)\mono\metadata\assembly-load-context.c" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\domain.c" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\appdomain-icalls.h" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\assembly.c" />
@@ -54,6 +55,10 @@
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\image-internals.h" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\jit-icall-reg.h" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\jit-info.c" />
+    <ClCompile Include="$(MonoSourceLocation)\mono\metadata\loaded-images.c" />
+    <ClInclude Include="$(MonoSourceLocation)\mono\metadata\loaded-images-internals.h" />
+    <ClCompile Include="$(MonoSourceLocation)\mono\metadata\loaded-images-global.c" />
+    <ClCompile Include="$(MonoSourceLocation)\mono\metadata\loaded-images-netcore.c" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\loader.c" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\loader-internals.h" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\locales.c" />
@@ -79,11 +84,13 @@
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\method-builder-ilgen.c" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\mono-basic-block.c" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\mono-basic-block.h" />
+    <ClInclude Include="$(MonoSourceLocation)\mono\metadata\mono-config-internals.h" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\mono-config.c" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\mono-debug.c" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\debug-internals.h" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\mono-endian.c" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\mono-endian.h" />
+    <ClInclude Include="$(MonoSourceLocation)\mono\metadata\mono-hash-internals.h" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\mono-hash.c" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\mono-hash.h" />
     <ClCompile Include="$(MonoSourceLocation)\mono\metadata\mono-conc-hash.c" />
@@ -243,6 +250,7 @@
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\opcodes.h" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\profiler.h" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\profiler-events.h" />
+    <ClInclude Include="$(MonoSourceLocation)\mono\metadata\profiler-legacy.h" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\reflection.h" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\row-indexes.h" />
     <ClInclude Include="$(MonoSourceLocation)\mono\metadata\tokentype.h" />

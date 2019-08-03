@@ -35,10 +35,9 @@
 /* @ENABLE_DEFINES@ */
 /* End configure ENABLE_DEFINES picked up from cygconfig.h or other external source, if available */
 
-#if defined(ENABLE_HYBRID_SUSPEND) || defined(ENABLE_COOP_SUSPEND)
-/* Windows MSVC builds defaults to preemptive suspend. Disable ENABLE_HYBRID_SUSPEND/ENABLE_COOP_SUSPEND defines. */
+#if defined(ENABLE_HYBRID_SUSPEND)
+/* Windows MSVC builds defaults to preemptive suspend. Disable ENABLE_HYBRID_SUSPEND defines. */
 #undef ENABLE_HYBRID_SUSPEND
-#undef ENABLE_COOP_SUSPEND
 #endif
 
 /* No ENABLE_DEFINES below this point */
@@ -62,34 +61,6 @@
 /* Have /dev/random */
 #define HAVE_CRYPT_RNG 1
 
-/* Define to 1 if you have the declaration of `InterlockedAdd',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDADD 1
-
-/* Define to 1 if you have the declaration of `InterlockedAdd64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDADD64 1
-
-/* Define to 1 if you have the declaration of `InterlockedCompareExchange64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDCOMPAREEXCHANGE64 1
-
-/* Define to 1 if you have the declaration of `InterlockedDecrement64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDDECREMENT64 1
-
-/* Define to 1 if you have the declaration of `InterlockedExchange64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDEXCHANGE64 1
-
-/* Define to 1 if you have the declaration of `InterlockedIncrement64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDINCREMENT64 1
-
-/* Define to 1 if you have the declaration of `__readfsdword',
-   and to 0 if you don't. */
-#define HAVE_DECL___READFSDWORD 1
-
 /* Define to 1 if you have the `getaddrinfo' function. */
 #define HAVE_GETADDRINFO 1
 
@@ -98,9 +69,6 @@
 
 /* Define to 1 if you have the `getprotobyname' function. */
 #define HAVE_GETPROTOBYNAME 1
-
-/* Define to 1 if you have the `GetProcessId' function. */
-#define HAVE_GETPROCESSID 1
 
 /* Have inet_ntop */
 #define HAVE_INET_NTOP 1

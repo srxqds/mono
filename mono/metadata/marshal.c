@@ -186,12 +186,7 @@ ves_icall_mono_string_to_utf8_impl (MonoStringHandle str, MonoError *error)
 MonoStringHandle
 ves_icall_string_new_wrapper_impl (const char *text, MonoError *error)
 {
-	if (text) {
-		MonoString *s = mono_string_new_checked (mono_domain_get (), text, error);
-		return_val_if_nok (error, NULL_HANDLE_STRING);
-		return MONO_HANDLE_NEW (MonoString, s);
-	}
-	return NULL_HANDLE_STRING;
+	return text ? mono_string_new_handle (mono_domain_get (), text, error) : NULL_HANDLE_STRING;
 }
 
 void
@@ -231,6 +226,7 @@ mono_marshal_init (void)
 		register_icall (mono_marshal_free, mono_icall_sig_void_ptr, FALSE);
 		register_icall (mono_marshal_set_last_error, mono_icall_sig_void, TRUE);
 		register_icall (mono_marshal_set_last_error_windows, mono_icall_sig_void_int32, TRUE);
+		register_icall (mono_marshal_clear_last_error, mono_icall_sig_void, TRUE);
 		register_icall (mono_string_utf8_to_builder, mono_icall_sig_void_ptr_ptr, FALSE);
 		register_icall (mono_string_utf8_to_builder2, mono_icall_sig_object_ptr, FALSE);
 		register_icall (mono_string_utf16_to_builder, mono_icall_sig_void_ptr_ptr, FALSE);
@@ -369,35 +365,46 @@ delegate_hash_table_remove (MonoDelegate *d)
 {
 	guint32 gchandle = 0;
 
+	if (!d->target)
+		return;
+
 	mono_marshal_lock ();
 	if (delegate_hash_table == NULL)
 		delegate_hash_table = delegate_hash_table_new ();
-	if (mono_gc_is_moving ())
-		gchandle = GPOINTER_TO_UINT (g_hash_table_lookup (delegate_hash_table, d->delegate_trampoline));
+	gchandle = GPOINTER_TO_UINT (g_hash_table_lookup (delegate_hash_table, d->delegate_trampoline));
 	g_hash_table_remove (delegate_hash_table, d->delegate_trampoline);
 	mono_marshal_unlock ();
-	if (gchandle && mono_gc_is_moving ())
+	if (gchandle)
 		mono_gchandle_free_internal (gchandle);
 }
 
 static void
 delegate_hash_table_add (MonoDelegateHandle d)
 {
-	guint32 gchandle;
-	guint32 old_gchandle;
-
 	mono_marshal_lock ();
 	if (delegate_hash_table == NULL)
 		delegate_hash_table = delegate_hash_table_new ();
 	gpointer delegate_trampoline = MONO_HANDLE_GETVAL (d, delegate_trampoline);
-	if (mono_gc_is_moving ()) {
-		gchandle = mono_gchandle_new_weakref_from_handle (MONO_HANDLE_CAST (MonoObject, d));
-		old_gchandle = GPOINTER_TO_UINT (g_hash_table_lookup (delegate_hash_table, delegate_trampoline));
-		g_hash_table_insert (delegate_hash_table, delegate_trampoline, GUINT_TO_POINTER (gchandle));
-		if (old_gchandle)
-			mono_gchandle_free_internal (old_gchandle);
+	gboolean has_target = MONO_HANDLE_GETVAL (d, target) != NULL;
+	if (has_target) {
+		// If the delegate has an instance method there is 1 to 1 mapping between
+		// the delegate object and the delegate_trampoline
+		guint32 gchandle = GPOINTER_TO_UINT (g_hash_table_lookup (delegate_hash_table, delegate_trampoline));
+		if (gchandle) {
+			// Somehow, some other thread beat us to it ?
+			g_assert (mono_gchandle_target_equal (gchandle, MONO_HANDLE_CAST (MonoObject, d)));
+		} else {
+			gchandle = mono_gchandle_new_weakref_from_handle (MONO_HANDLE_CAST (MonoObject, d));
+			g_hash_table_insert (delegate_hash_table, delegate_trampoline, GUINT_TO_POINTER (gchandle));
+		}
 	} else {
-		g_hash_table_insert (delegate_hash_table, delegate_trampoline, MONO_HANDLE_RAW (d));
+		if (g_hash_table_lookup (delegate_hash_table, delegate_trampoline) == NULL) {
+			guint32 gchandle = mono_gchandle_from_handle (MONO_HANDLE_CAST (MonoObject, d), FALSE);
+			// This delegate will always be associated with its delegate_trampoline in the table.
+			// We don't free this delegate object because it is too expensive to keep track of these
+			// pairs and avoid races with the delegate finalization.
+			g_hash_table_insert (delegate_hash_table, delegate_trampoline, GUINT_TO_POINTER (gchandle));
+		}
 	}
 	mono_marshal_unlock ();
 }
@@ -460,16 +467,11 @@ mono_ftnptr_to_delegate_impl (MonoClass *klass, gpointer ftn, MonoError *error)
 	mono_marshal_lock ();
 	if (delegate_hash_table == NULL)
 		delegate_hash_table = delegate_hash_table_new ();
+	gchandle = GPOINTER_TO_UINT (g_hash_table_lookup (delegate_hash_table, ftn));
+	mono_marshal_unlock ();
+	if (gchandle)
+		MONO_HANDLE_ASSIGN (d, MONO_HANDLE_CAST (MonoDelegate, mono_gchandle_get_target_handle (gchandle)));
 
-	if (mono_gc_is_moving ()) {
-		gchandle = GPOINTER_TO_UINT (g_hash_table_lookup (delegate_hash_table, ftn));
-		mono_marshal_unlock ();
-		if (gchandle)
-			MONO_HANDLE_ASSIGN (d, MONO_HANDLE_CAST (MonoDelegate, mono_gchandle_get_target_handle (gchandle)));
-	} else {
-		MONO_HANDLE_ASSIGN (d, MONO_HANDLE_NEW (MonoDelegate, (MonoDelegate*)g_hash_table_lookup (delegate_hash_table, ftn)));
-		mono_marshal_unlock ();
-	}
 	if (MONO_HANDLE_IS_NULL (d)) {
 		/* This is a native function, so construct a delegate for it */
 		MonoMethodSignature *sig;
@@ -585,11 +587,9 @@ mono_string_from_byvalwstr_impl (const gunichar2 *data, int max_len, MonoError *
 		return NULL_HANDLE_STRING;
 
 	// FIXME Check max_len while scanning data? mono_string_from_byvalstr does.
-	int len = g_utf16_len (data);
+	const int len = g_utf16_len (data);
 
-	MonoString *res = mono_string_new_utf16_checked (mono_domain_get (), data, MIN (len, max_len), error);
-	return_val_if_nok (error, NULL_HANDLE_STRING);
-	return MONO_HANDLE_NEW (MonoString, res);
+	return mono_string_new_utf16_handle (mono_domain_get (), data, MIN (len, max_len), error);
 }
 
 gpointer
@@ -762,11 +762,33 @@ mono_string_builder_new (int starting_string_length, MonoError *error)
 static void
 mono_string_utf16_to_builder_copy (MonoStringBuilderHandle sb, const gunichar2 *text, size_t string_len, MonoError *error)
 {
-	MonoArrayHandle chunkChars = MONO_HANDLE_NEW_GET (MonoArray, sb, chunkChars);
-	gchandle_t gchandle = 0;
-	memcpy (MONO_ARRAY_HANDLE_PIN (chunkChars, gunichar2, 0, &gchandle), text, sizeof (gunichar2) * string_len);
-	mono_gchandle_free_internal (gchandle);
-	MONO_HANDLE_SETVAL (sb, chunkLength, int, string_len);
+	MonoArrayHandle chunkChars = MONO_HANDLE_NEW (MonoArray, NULL);
+	MonoStringBuilderHandle chunk = MONO_HANDLE_NEW (MonoStringBuilder, MONO_HANDLE_RAW (sb));
+
+	guint capacity = mono_string_builder_capacity (sb);
+
+	g_assert (capacity >= string_len);
+
+	MONO_ENTER_NO_SAFEPOINTS;
+
+	do {
+		MONO_HANDLE_GET (chunkChars, chunk, chunkChars);
+		const int maxLength = MONO_HANDLE_GETVAL (chunkChars, max_length);
+		g_assert (maxLength >= 0);
+		const int chunkOffset = MONO_HANDLE_GETVAL (chunk, chunkOffset);
+		g_assert (chunkOffset >= 0);
+		if (maxLength > 0 && chunkOffset < string_len) {
+			// Check that we will not overrun our boundaries.
+			int charsToCopy = MIN (string_len - chunkOffset, maxLength);
+			memcpy (MONO_HANDLE_RAW (chunkChars)->vector, text + chunkOffset, charsToCopy * sizeof (gunichar2));
+			MONO_HANDLE_SETVAL (chunk, chunkLength, int, charsToCopy);
+		} else {
+			MONO_HANDLE_SETVAL (chunk, chunkLength, int, 0);
+		}
+		MONO_HANDLE_GET (chunk, chunk, chunkPrevious);
+	} while (MONO_HANDLE_BOOL (chunk));
+
+	MONO_EXIT_NO_SAFEPOINTS;
 }
 
 MonoStringBuilderHandle
@@ -919,16 +941,17 @@ mono_string_builder_to_utf16_impl (MonoStringBuilderHandle sb, MonoError *error)
 
 	g_assert (MONO_HANDLE_GET_BOOL (sb, chunkChars));
 
-	guint len = mono_string_builder_capacity (sb);
+	guint capacity = mono_string_builder_capacity (sb);
+	guint length = mono_string_builder_string_length (sb);
 
-	if (len == 0)
-		len = 1; // Why?
+	// Follow CoreCLR and double NULL terminate the buffer so we have more protection
+	// against native code putting garbage in there.
 
-	gunichar2 *str = (gunichar2 *)mono_marshal_alloc ((len + 1) * sizeof (gunichar2), error);
+	gunichar2 *str = (gunichar2 *)mono_marshal_alloc ((capacity + 2) * sizeof (gunichar2), error);
 	return_val_if_nok (error, NULL);
 
-	str [len] = 0;
-	str [0] = 0; // Cover the case when original len == 0.
+	str [capacity] = 0;
+	str [capacity + 1] = 0;
 
 	MonoArrayHandle chunkChars = MONO_HANDLE_NEW (MonoArray, NULL);
 	MonoStringBuilderHandle chunk = MONO_HANDLE_NEW (MonoStringBuilder, MONO_HANDLE_RAW (sb));
@@ -944,11 +967,13 @@ mono_string_builder_to_utf16_impl (MonoStringBuilderHandle sb, MonoError *error)
 			const int chunkOffset = MONO_HANDLE_GETVAL (chunk, chunkOffset);
 			g_assert (chunkOffset >= 0);
 			g_assertf ((chunkOffset + chunkLength) >= chunkLength, "integer overflow");
-			g_assertf ((chunkOffset + chunkLength) <= len, "A chunk in the StringBuilder had a length longer than expected from the offset.");
+			g_assertf ((chunkOffset + chunkLength) <= capacity, "A chunk in the StringBuilder had a length longer than expected from the offset.");
 			memcpy (str + chunkOffset, MONO_HANDLE_RAW (chunkChars)->vector, chunkLength * sizeof (gunichar2));
 		}
 		MONO_HANDLE_GET (chunk, chunk, chunkPrevious);
 	} while (MONO_HANDLE_BOOL (chunk));
+
+	str [length] = 0;
 
 	MONO_EXIT_NO_SAFEPOINTS;
 
@@ -1362,11 +1387,6 @@ mono_marshal_get_ptr_to_stringbuilder_conv (MonoMethodPInvoke *piinfo, MonoMarsh
 
 	switch (encoding) {
 	case MONO_NATIVE_LPWSTR:
-		/* 
-		 * mono_string_builder_to_utf16 does not allocate a 
-		 * new buffer, so no need to free it.
-		 */
-		*need_free = FALSE;
 		return MONO_MARSHAL_CONV_LPWSTR_SB;
 	case MONO_NATIVE_UTF8STR:
 		return MONO_MARSHAL_CONV_UTF8STR_SB;
@@ -1851,12 +1871,15 @@ mono_marshal_get_delegate_begin_invoke (MonoMethod *method)
 
 	get_marshal_cb ()->emit_delegate_begin_invoke (mb, sig);
 
+	WrapperInfo *info = mono_wrapper_info_create (mb, WRAPPER_SUBTYPE_NONE);
+	info->d.delegate_invoke.method = method;
+
 	if (ctx) {
 		MonoMethod *def;
-		def = mono_mb_create_and_cache (cache, method->klass, mb, sig, sig->param_count + 16);
+		def = mono_mb_create_and_cache_full (cache, method->klass, mb, sig, sig->param_count + 16, info, NULL);
 		res = cache_generic_delegate_wrapper (cache, orig_method, def, ctx);
 	} else {
-		res = mono_mb_create_and_cache (cache, sig, mb, sig, sig->param_count + 16);
+		res = mono_mb_create_and_cache_full (cache, sig, mb, sig, sig->param_count + 16, info, NULL);
 	}
 
 	mono_mb_free (mb);
@@ -2030,13 +2053,16 @@ mono_marshal_get_delegate_end_invoke (MonoMethod *method)
 
 	get_marshal_cb ()->emit_delegate_end_invoke (mb, sig);
 
+	WrapperInfo *info = mono_wrapper_info_create (mb, WRAPPER_SUBTYPE_NONE);
+	info->d.delegate_invoke.method = method;
+
 	if (ctx) {
 		MonoMethod *def;
-		def = mono_mb_create_and_cache (cache, method->klass, mb, sig, sig->param_count + 16);
+		def = mono_mb_create_and_cache_full (cache, method->klass, mb, sig, sig->param_count + 16, info, NULL);
 		res = cache_generic_delegate_wrapper (cache, orig_method, def, ctx);
 	} else {
-		res = mono_mb_create_and_cache (cache, sig,
-										mb, sig, sig->param_count + 16);
+		res = mono_mb_create_and_cache_full (cache, sig,
+											 mb, sig, sig->param_count + 16, info, NULL);
 	}
 	mono_mb_free (mb);
 
@@ -2509,7 +2535,7 @@ mono_marshal_get_runtime_invoke_full (MonoMethod *method, gboolean virtual_, gbo
 {
 	MonoMethodSignature *sig, *csig, *callsig;
 	MonoMethodBuilder *mb;
-	GHashTable *method_cache = NULL, *sig_cache;
+	GHashTable *method_cache = NULL, *sig_cache = NULL;
 	GHashTable **cache_table = NULL;
 	MonoClass *target_klass;
 	MonoMethod *res = NULL;
@@ -2931,7 +2957,7 @@ mono_marshal_get_icall_wrapper (MonoJitICallInfo *callinfo, gboolean check_excep
 		csig->call_convention = 0;
 
 	info = mono_wrapper_info_create (mb, WRAPPER_SUBTYPE_ICALL_WRAPPER);
-	info->d.icall.func = (gpointer)func;
+	info->d.icall.jit_icall_id = mono_jit_icall_info_id (callinfo);
 	res = mono_mb_create_and_cache_full (cache, (gpointer) func, mb, csig, csig->param_count + 16, info, NULL);
 	mono_mb_free (mb);
 	g_free (name);
@@ -3272,9 +3298,10 @@ mono_emit_marshal (EmitMarshalContext *m, int argnum, MonoType *t,
 #endif
 
 #if !defined(DISABLE_COM)
-		if (spec && (spec->native == MONO_NATIVE_IUNKNOWN ||
+		if ((spec && (spec->native == MONO_NATIVE_IUNKNOWN ||
 			spec->native == MONO_NATIVE_IDISPATCH ||
-			spec->native == MONO_NATIVE_INTERFACE))
+			spec->native == MONO_NATIVE_INTERFACE)) ||
+			(t->type == MONO_TYPE_CLASS && mono_cominterop_is_interface(t->data.klass)))
 			return mono_cominterop_emit_marshal_com_interface (m, argnum, t, spec, conv_arg, conv_arg_type, action);
 		if (spec && (spec->native == MONO_NATIVE_SAFEARRAY) && 
 			(spec->data.safearray_data.elem_type == MONO_VARIANT_VARIANT) && 
@@ -3283,7 +3310,7 @@ mono_emit_marshal (EmitMarshalContext *m, int argnum, MonoType *t,
 #endif
 
 		if (mono_class_try_get_safehandle_class () != NULL && t->data.klass &&
-		    mono_class_is_subclass_of (t->data.klass,  mono_class_try_get_safehandle_class (), FALSE))
+		    mono_class_is_subclass_of_internal (t->data.klass,  mono_class_try_get_safehandle_class (), FALSE))
 			return get_marshal_cb ()->emit_marshal_safehandle (m, argnum, t, spec, conv_arg, conv_arg_type, action);
 		
 		return get_marshal_cb ()->emit_marshal_object (m, argnum, t, spec, conv_arg, conv_arg_type, action);
@@ -4996,6 +5023,17 @@ mono_marshal_set_last_error_windows (int error)
 #endif
 }
 
+void
+mono_marshal_clear_last_error (void)
+{
+	/* This icall is called just before a P/Invoke call. */
+#ifdef WIN32
+	SetLastError (ERROR_SUCCESS);
+#else
+	errno = 0;
+#endif
+}
+
 static gsize
 copy_managed_common (MonoArrayHandle managed, gconstpointer native, gint32 start_index,
 		gint32 length, gpointer *managed_addr, guint32 *gchandle, MonoError *error)
@@ -5510,10 +5548,11 @@ ves_icall_System_Runtime_InteropServices_Marshal_ReAllocCoTaskMem (gpointer ptr,
 	return res;
 }
 
-void*
-ves_icall_System_Runtime_InteropServices_Marshal_UnsafeAddrOfPinnedArrayElement (MonoArray *arrayobj, int index)
+gpointer
+ves_icall_System_Runtime_InteropServices_Marshal_UnsafeAddrOfPinnedArrayElement (MonoArrayHandle arrayobj, int index, MonoError *error)
 {
-	return mono_array_addr_with_size_fast (arrayobj, mono_array_element_size (arrayobj->obj.vtable->klass), index);
+	int esize = mono_array_element_size (mono_handle_class (arrayobj));
+	return mono_array_addr_with_size_fast (MONO_HANDLE_RAW (arrayobj), esize, index);
 }
 
 MonoDelegateHandle
