@@ -1486,9 +1486,12 @@ mono_resolve_patch_target (MonoMethod *method, MonoDomain *domain, guint8 *code,
 			jump_table = (void **)mono_code_manager_reserve (mono_dynamic_code_hash_lookup (domain, method)->code_mp, sizeof (gpointer) * patch_info->data.table->table_size);
 		} else {
 			if (mono_aot_only) {
-				jump_table = (void **)mono_domain_alloc (domain, sizeof (gpointer) * patch_info->data.table->table_size);
+				jump_table = (void **)mono_domain_alloc (domain, sizeof (gpointer) * patch_info->data.table->table_size);  // check by dsqiu aot
 			} else {
-				jump_table = (void **)mono_domain_code_reserve (domain, sizeof (gpointer) * patch_info->data.table->table_size);
+				jump_table = (void **)mono_domain_code_reserve (domain, sizeof (gpointer) * patch_info->data.table->table_size);  // check by dsqiu
+				// extend by dsqiu
+				mono_domain_method_code_track(method, jump_table, sizeof(gpointer) * patch_info->data.table->table_size);
+				// extend end
 			}
 		}
 
@@ -2165,7 +2168,10 @@ create_jit_info_for_trampoline (MonoMethod *wrapper, MonoTrampInfo *info)
 		uw_info = mono_unwind_ops_encode (info->unwind_ops, &info_len);
 	}
 
-	jinfo = (MonoJitInfo *)mono_domain_alloc0 (domain, MONO_SIZEOF_JIT_INFO);
+	jinfo = (MonoJitInfo *)mono_domain_alloc0 (domain, MONO_SIZEOF_JIT_INFO);  // check by dsqiu
+	// extend by dsqiu
+	jinfo->alloc_size = MONO_SIZEOF_JIT_INFO;
+	// extend end
 	jinfo->d.method = wrapper;
 	jinfo->code_start = info->code;
 	jinfo->code_size = info->code_size;
@@ -2781,6 +2787,9 @@ typedef struct {
 	MonoMethod *method;
 	gpointer compiled_method;
 	gpointer runtime_invoke;
+	// extend by dsqiu
+	MonoMethod *invoke_method;
+	// entend end
 	MonoVTable *vtable;
 	MonoDynCallInfo *dyn_call_info;
 	MonoClass *ret_box_class;
@@ -2922,10 +2931,33 @@ create_runtime_invoke_info (MonoDomain *domain, MonoMethod *method, gpointer com
 				g_free (wrapper_sig);
 			}
 		}
-		info->runtime_invoke = mono_jit_compile_method (invoke, error);
-		if (!mono_error_ok (error)) {
-			g_free (info);
-			return NULL;
+		// extend by dsqiu
+		// optimization dy dsqiu
+		// cache
+		MonoJitDomainInfo* domain_jit_info = domain_jit_info(domain);
+		if (!domain_jit_info->invoke_method_hash)
+		{
+			domain_jit_info->invoke_method_hash = g_hash_table_new(NULL, NULL);
+		}
+		gpointer runtime_invoke = g_hash_table_lookup(domain_jit_info->invoke_method_hash, invoke);
+		if (runtime_invoke)
+		{
+			info->runtime_invoke = runtime_invoke;
+		}
+		else
+		{
+		// extend end
+			info->runtime_invoke = mono_jit_compile_method(invoke, error);
+			info->invoke_method = invoke;
+			if (!mono_error_ok(error)) {
+				g_free(info);
+				return NULL;
+			}
+		// extend by dsqiu
+			else {
+				g_hash_table_insert(domain_jit_info->invoke_method_hash, invoke, info->runtime_invoke);
+			}
+
 		}
 	}
 
@@ -3506,6 +3538,11 @@ no_vcall_trampoline (void)
 static gpointer *vtable_trampolines;
 static int vtable_trampolines_size;
 
+// extend by dsqiu
+// notice:好像没有出现
+static GHashTable* vtable_trampolines_hash = NULL;
+// extend end
+
 gpointer
 mini_get_vtable_trampoline (MonoVTable *vt, int slot_index)
 {
@@ -3536,8 +3573,22 @@ mini_get_vtable_trampoline (MonoVTable *vt, int slot_index)
 		mono_jit_unlock ();
 	}
 
-	if (!vtable_trampolines [index])
-		vtable_trampolines [index] = mono_create_specific_trampoline (GUINT_TO_POINTER (slot_index), MONO_TRAMPOLINE_VCALL, mono_get_root_domain (), NULL);
+	if (!vtable_trampolines[index])
+	{
+		int code_size;
+		// vtable_trampolines[index] = mono_create_specific_trampoline(GUINT_TO_POINTER(slot_index), MONO_TRAMPOLINE_VCALL, mono_get_root_domain(), NULL);
+		vtable_trampolines[index] = mono_create_specific_trampoline(GUINT_TO_POINTER(slot_index), MONO_TRAMPOLINE_VCALL, mono_get_root_domain(), &code_size);
+		// extend by dsqiu
+		// NOTICE by dsqiu
+		// todo:不同的分支返回值都要检查下
+		mono_domain_vtable_code_track(vt, vtable_trampolines[index], code_size);
+		if (!vtable_trampolines_hash)
+		{
+			vtable_trampolines_hash = g_hash_table_new(NULL, NULL);
+		}
+		g_hash_table_insert(vtable_trampolines_hash, vtable_trampolines[index], vt);
+		// extend end
+	}
 	return vtable_trampolines [index];
 }
 
@@ -3991,6 +4042,9 @@ mini_free_jit_domain_info (MonoDomain *domain)
 	g_hash_table_destroy (info->interp_method_pointer_hash);
 	g_hash_table_destroy (info->llvm_vcall_trampoline_hash);
 	mono_conc_hashtable_destroy (info->runtime_invoke_hash);
+	// extend by dsqiu
+	g_hash_table_destroy(info->invoke_method_hash);
+	// extend end
 	g_hash_table_destroy (info->seq_points);
 	g_hash_table_destroy (info->arch_seq_points);
 	if (info->agent_info)
@@ -5065,3 +5119,204 @@ mono_runtime_install_custom_handlers_usage (void)
 		 "No handlers supported on current platform.\n");
 }
 #endif /* HOST_WIN32 */
+
+// extend by dsqiu
+
+static gboolean
+delegate_trampoline_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoClassMethodPair* pair = (MonoClassMethodPair*)key;
+	MonoDelegateTrampInfo* tramp_info = (MonoDelegateTrampInfo*)value;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (pair->klass->image == image || (pair->method && pair->method->klass->image == image))
+	{
+		mono_domain_code_gc_collect(data->domain, tramp_info->code_start, tramp_info->code_size);
+		mono_domain_mempool_gc_collect(data->domain, pair, sizeof(MonoClassMethodPair));
+		mono_domain_mempool_gc_collect(data->domain, tramp_info, sizeof(MonoDelegateTrampInfo));
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+method_code_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethod* method = (MonoMethod*)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (method->klass->image == image)
+	{
+		mono_domain_mempool_gc_collect(data->domain, value, sizeof(gpointer));
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+mono_method_key_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethod* method = (MonoMethod*)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (method->klass->image == image)
+	{
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean 
+runtime_invoke_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethod* method = (MonoMethod*)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (method->klass->image == image)
+	{
+		RuntimeInvokeInfo *info = (RuntimeInvokeInfo*)value;
+		// remove invoke_method
+		mono_domain_remove_jit_info_for_method(data->domain, info->invoke_method);
+		// todo remove compile_method
+		// remove from jit_code_hash
+		mono_internal_hash_table_remove(&data->domain->jit_code_hash, info->invoke_method);
+		runtime_invoke_info_free(value);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+invoke_method_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethod* method = (MonoMethod*)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (method->klass->image == image)
+	{
+		// 
+		mono_domain_remove_jit_info_for_method(data->domain, method);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+jump_target_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethod* method = (MonoMethod*)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (method->klass->image == image)
+	{
+		MonoJumpList * jump_list = (MonoJumpList *)value;
+		g_slist_free((GSList*)jump_list->list);
+		mono_domain_mempool_gc_collect(data->domain, jump_list, sizeof(MonoJumpList));
+		return TRUE;
+	}
+	return FALSE;
+}
+
+
+static gboolean
+vtable_trampolines_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoVTable* vt = (MonoVTable*)value;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (vt->klass->image == image)
+	{
+		int i;
+		for (i = 0; i < vtable_trampolines_size; i++)
+		{
+			if (vtable_trampolines[i] == key)
+			{
+				vtable_trampolines[i] = NULL;
+			}
+		}
+		return TRUE;
+	}
+	return FALSE;
+}
+void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+{
+	MonoImage* image = assembly->image;
+	_DomainAssemblyData user_data;
+	user_data.assembly = assembly;
+	user_data.domain = domain;
+	MonoJitDomainInfo *info = domain_jit_info(domain);
+
+	//	g_hash_table_foreach(info->jump_target_hash, delete_jump_list, NULL);
+	//	g_hash_table_destroy(info->jump_target_hash);
+	if (info->jump_target_hash)
+	{
+		g_hash_table_foreach_remove(info->jump_target_hash, jump_target_hash_foreach_remove, &user_data);
+	}
+	// aot use only
+//	if (info->jump_target_got_slot_hash) {
+//		g_hash_table_foreach(info->jump_target_got_slot_hash, delete_got_slot_list, NULL);
+//		g_hash_table_destroy(info->jump_target_got_slot_hash);
+//	}
+//	if (info->dynamic_code_hash) {
+//		g_hash_table_foreach(info->dynamic_code_hash, dynamic_method_info_free, NULL);
+//		g_hash_table_destroy(info->dynamic_code_hash);
+//	}
+	if (info->method_code_hash)
+	{
+		g_hash_table_foreach_remove(info->method_code_hash, method_code_hash_foreach_remove, &user_data);
+	}
+	if (info->jump_trampoline_hash)
+	{
+		g_hash_table_foreach_remove(info->jump_trampoline_hash, mono_method_key_foreach_remove, &user_data);
+	}
+	//	g_hash_table_destroy(info->jit_trampoline_hash);
+	if (info->jit_trampoline_hash)
+	{
+		// todo: remove code
+		g_hash_table_foreach_remove(info->jit_trampoline_hash, mono_method_key_foreach_remove, &user_data);
+	}
+	if (info->delegate_trampoline_hash)
+	{
+		g_hash_table_foreach_remove(info->delegate_trampoline_hash, delegate_trampoline_hash_foreach_remove, &user_data);
+	}
+	if (info->invoke_method_hash)
+	{
+		g_hash_table_foreach_remove(info->invoke_method_hash, mono_method_key_foreach_remove, &user_data);
+	}
+	// 在 mini-trampolines 中
+	// if (info->static_rgctx_trampoline_hash)
+	// 在 mini-generic_sharing 中
+	//	g_hash_table_destroy(info->mrgctx_hash);
+	//	g_hash_table_destroy(info->method_rgctx_hash);
+	// 在interp.c中
+	//	g_hash_table_destroy(info->interp_method_pointer_hash);
+	// 没用到
+	//	g_hash_table_destroy(info->llvm_vcall_trampoline_hash);
+
+	//	mono_conc_hashtable_destroy(info->runtime_invoke_hash);
+	if (info->runtime_invoke_hash)
+	{
+		mono_conc_hashtable_foreach_steal(info->runtime_invoke_hash, runtime_invoke_hash_foreach_remove, &user_data);
+	}
+
+	// debug breakpoint
+	// if (info->seq_points)
+//	g_hash_table_destroy(info->arch_seq_points);
+//	if (info->agent_info)
+//		mini_get_dbg_callbacks()->free_domain_info(domain);
+
+//	g_hash_table_destroy(info->gsharedvt_arg_tramp_hash);
+//	if (info->llvm_jit_callees) {
+//		g_hash_table_foreach(info->llvm_jit_callees, free_jit_callee_list, NULL);
+//		g_hash_table_destroy(info->llvm_jit_callees);
+//	}
+
+//#ifdef ENABLE_LLVM
+//	mono_llvm_free_domain_info(domain);
+//#endif
+	if (vtable_trampolines_hash)
+	{
+		g_hash_table_foreach_remove(vtable_trampolines_hash, vtable_trampolines_hash_foreach_remove, &user_data);
+	}
+}
+// extend end

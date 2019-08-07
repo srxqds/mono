@@ -131,7 +131,7 @@ mono_create_static_rgctx_trampoline (MonoMethod *m, gpointer addr)
 
 	mono_domain_lock (domain);
 	/* Duplicates inserted while we didn't hold the lock are OK */
-	info = (RgctxTrampInfo *)mono_domain_alloc (domain, sizeof (RgctxTrampInfo));
+	info = (RgctxTrampInfo *)mono_domain_alloc (domain, sizeof (RgctxTrampInfo));  // check by dsqiu
 	info->m = m;
 	info->addr = addr;
 	g_hash_table_insert (domain_jit_info (domain)->static_rgctx_trampoline_hash, info, res);
@@ -1367,7 +1367,10 @@ mono_create_jump_trampoline (MonoDomain *domain, MonoMethod *method, gboolean ad
 	code = mono_create_specific_trampoline (method, MONO_TRAMPOLINE_JUMP, mono_domain_get (), &code_size);
 	g_assert (code_size);
 
-	ji = (MonoJitInfo *)mono_domain_alloc0 (domain, MONO_SIZEOF_JIT_INFO);
+	ji = (MonoJitInfo *)mono_domain_alloc0 (domain, MONO_SIZEOF_JIT_INFO);  // check by dsqiu
+	// extend by dsqiu
+	ji->alloc_size = MONO_SIZEOF_JIT_INFO;
+	// extend end
 	ji->code_start = code;
 	ji->code_size = code_size;
 	ji->d.method = method;
@@ -1426,8 +1429,14 @@ mono_create_jit_trampoline (MonoDomain *domain, MonoMethod *method, MonoError *e
 	if (tramp)
 		return tramp;
 
-	tramp = mono_create_specific_trampoline (method, MONO_TRAMPOLINE_JIT, domain, NULL);
-	
+	// tramp = mono_create_specific_trampoline (method, MONO_TRAMPOLINE_JIT, domain, NULL);
+	// extend by dsqiu
+	int code_size;
+	tramp = mono_create_specific_trampoline(method, MONO_TRAMPOLINE_JIT, domain, &code_size);
+	// NOTICE by dsqiu
+	// 不同分支可能不一样
+	mono_domain_method_code_track(method, tramp, code_size);
+	// extend end
 	mono_domain_lock (domain);
 	g_hash_table_insert (domain_jit_info (domain)->jit_trampoline_hash, method, tramp);
 	UnlockedIncrement (&jit_trampolines);
@@ -1482,10 +1491,14 @@ mono_create_delegate_trampoline_info (MonoDomain *domain, MonoClass *klass, Mono
 
 	invoke = mono_get_delegate_invoke_internal (klass);
 	g_assert (invoke);
-
-	tramp_info = (MonoDelegateTrampInfo *)mono_domain_alloc0 (domain, sizeof (MonoDelegateTrampInfo));
+    // check by dsqiu
+	tramp_info = (MonoDelegateTrampInfo *)mono_domain_alloc0 (domain, sizeof (MonoDelegateTrampInfo));  // check by dsqiu
 	tramp_info->invoke = invoke;
 	tramp_info->invoke_sig = mono_method_signature_internal (invoke);
+	// extend by dsqiu
+	// 会分配内存和代码块，是全局的不需要回收
+	// todo 优化，这里会导致内存不连续
+	// extend end
 	tramp_info->impl_this = mono_arch_get_delegate_invoke_impl (mono_method_signature_internal (invoke), TRUE);
 	tramp_info->impl_nothis = mono_arch_get_delegate_invoke_impl (mono_method_signature_internal (invoke), FALSE);
 	tramp_info->method = method;
@@ -1496,8 +1509,12 @@ mono_create_delegate_trampoline_info (MonoDomain *domain, MonoClass *klass, Mono
 	}
 	tramp_info->invoke_impl = mono_create_specific_trampoline (tramp_info, MONO_TRAMPOLINE_DELEGATE, domain, &code_size);
 	g_assert (code_size);
-
-	dpair = (MonoClassMethodPair *)mono_domain_alloc0 (domain, sizeof (MonoClassMethodPair));
+	// extend by dsqiu
+	tramp_info->code_start = tramp_info->invoke_impl;
+	tramp_info->code_size = code_size;
+	// extend end
+	// check by dsqiu
+	dpair = (MonoClassMethodPair *)mono_domain_alloc0 (domain, sizeof (MonoClassMethodPair));  // check by dsqiu
 	memcpy (dpair, &pair, sizeof (MonoClassMethodPair));
 
 	/* store trampoline address */
@@ -1701,3 +1718,34 @@ mini_get_breakpoint_trampoline (void)
 
 	return trampoline;
 }
+
+
+// extend by dsqiu
+
+static gboolean
+static_rgctx_trampoline_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	RgctxTrampInfo * info = (RgctxTrampInfo *)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	MonoImage* image = data->assembly->image;
+	if (info->m->klass->image == image)
+	{
+		mono_domain_mempool_gc_collect(data->domain, info, sizeof(RgctxTrampInfo));
+		return TRUE;
+	}
+	return FALSE;
+}
+
+void mono_mini_remove_trampoline_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+{
+	MonoImage* image = assembly->image;
+	_DomainAssemblyData user_data;
+	user_data.assembly = assembly;
+	user_data.domain = domain;
+	MonoJitDomainInfo *info = domain_jit_info(domain);
+	if (info->static_rgctx_trampoline_hash)
+	{
+		g_hash_table_foreach_remove(info->static_rgctx_trampoline_hash, static_rgctx_trampoline_hash_foreach_remove, &user_data);
+	}
+}
+// extend end

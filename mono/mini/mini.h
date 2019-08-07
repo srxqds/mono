@@ -1079,6 +1079,10 @@ typedef struct
 	gpointer impl_this;
 	gpointer impl_nothis;
 	gboolean need_rgctx_tramp;
+	// extend by dsqiu;
+	gpointer code_start;
+	guint32 code_size;
+	// extend end
 } MonoDelegateTrampInfo;
 
 /*
@@ -1310,6 +1314,9 @@ typedef struct {
 
 	unsigned char   *cil_start;
 	unsigned char   *native_code;
+	// extend by dsqiu
+	guint			code_alloc;
+	// extend end
 	guint            code_size;
 	guint            code_len;
 	guint            prolog_end;
@@ -2797,5 +2804,11 @@ mini_safepoints_enabled (void)
 	return TRUE;
 #endif
 }
+
+// extend by dsqiu
+void mono_mini_remove_runtime_info_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly); 
+void mono_mini_remove_trampoline_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
+void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
+// extend end
 
 #endif /* __MONO_MINI_H__ */

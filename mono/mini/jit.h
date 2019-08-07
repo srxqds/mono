@@ -102,5 +102,11 @@ MONO_API char*       mono_get_runtime_build_info    (void);
 
 MONO_END_DECLS
 
+
+// extend by dsqiu
+MONO_API void
+mono_domain_remove_unused_assembly(MonoAssembly* assembly);
+// extend end
+
 #endif
 

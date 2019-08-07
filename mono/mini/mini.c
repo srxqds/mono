@@ -81,6 +81,10 @@
 #include "aot-runtime.h"
 #include "mini-runtime.h"
 
+// extend by dsqiu
+#include "interp/interp.h"
+// extend end
+
 MonoCallSpec *mono_jit_trace_calls;
 MonoMethodDesc *mono_inject_async_exc_method;
 int mono_inject_async_exc_pos;
@@ -2201,12 +2205,24 @@ mono_codegen (MonoCompile *cfg)
 		mono_domain_unlock (cfg->domain);
 
 		if (mono_using_xdebug)
+		{
 			/* See the comment for cfg->code_domain */
-			code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);
+			code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);  // check by dsqiu
+	        // extend by dsqiu
+			// dynamic not support ?
+			mono_domain_method_code_track(cfg->method, code, cfg->code_size + cfg->thunk_area + unwindlen);
+			cfg->code_alloc = cfg->code_size + cfg->thunk_area + unwindlen;
+			// extend end
+		}
 		else
 			code = (guint8 *)mono_code_manager_reserve (cfg->dynamic_info->code_mp, cfg->code_size + cfg->thunk_area + unwindlen);
 	} else {
-		code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen);
+		// code = (guint8 *)mono_domain_code_reserve (code_domain, cfg->code_size + cfg->thunk_area + unwindlen); // check by dsqiu
+		// extend by dsqiu
+		cfg->code_alloc = cfg->code_size + cfg->thunk_area + unwindlen;
+		code = (guint8 *)mono_domain_code_reserve(code_domain, cfg->code_alloc);
+		mono_domain_method_code_track(cfg->method, code, cfg->code_alloc);
+		// extend end
 	}
 
 	if (cfg->thunk_area) {
@@ -2294,11 +2310,27 @@ mono_codegen (MonoCompile *cfg)
 
 	if (cfg->method->dynamic) {
 		if (mono_using_xdebug)
-			mono_domain_code_commit (code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+		{
+			// mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+			// extend by dsqiu
+			if (mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len))
+			{
+				cfg->code_alloc -= cfg->code_size - cfg->code_len;
+			}
+			// extend end
+
+		}
 		else
 			mono_code_manager_commit (cfg->dynamic_info->code_mp, cfg->native_code, cfg->code_size, cfg->code_len);
 	} else {
-		mono_domain_code_commit (code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+		// mono_domain_code_commit (code_domain, cfg->native_code, cfg->code_size, cfg->code_len);
+		// extend by dsqiu
+		if (mono_domain_code_commit(code_domain, cfg->native_code, cfg->code_size, cfg->code_len))
+		{
+			cfg->code_alloc -= cfg->code_size- cfg->code_len;
+		}
+		// extend end
+
 	}
 	MONO_PROFILER_RAISE (jit_code_buffer, (cfg->native_code, cfg->code_len, MONO_PROFILER_CODE_BUFFER_METHOD, cfg->method));
 	
@@ -2445,7 +2477,13 @@ create_jit_info (MonoCompile *cfg, MonoMethod *method_to_compile)
 	if (cfg->method->dynamic)
 		jinfo = (MonoJitInfo *)g_malloc0 (mono_jit_info_size (flags, num_clauses, num_holes));
 	else
-		jinfo = (MonoJitInfo *)mono_domain_alloc0 (cfg->domain, mono_jit_info_size (flags, num_clauses, num_holes));
+	{
+		jinfo = (MonoJitInfo *)mono_domain_alloc0 (cfg->domain, mono_jit_info_size (flags, num_clauses, num_holes));  // check by dsqiu
+		// extend by dsqiu
+		jinfo->alloc_size = mono_jit_info_size(flags, num_clauses, num_holes);
+		jinfo->code_alloc = cfg->code_alloc;
+		// extend end
+	}
 	jinfo_try_holes_size += num_holes * sizeof (MonoTryBlockHoleJitInfo);
 
 	mono_jit_info_init (jinfo, cfg->method_to_register, cfg->native_code, cfg->code_len, flags, num_clauses, num_holes);
@@ -4276,3 +4314,256 @@ mono_target_pagesize (void)
 	 */
 	return 4 * 1024;
 }
+
+
+// extend by dsqiu
+
+
+static gboolean
+mono_domain_remove_unused_special_field(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoClassField* field = (MonoClassField*)key;
+	MonoClass* parent = field->parent;
+	MonoImage* image = (MonoImage*)user_data;
+	if (image == parent->image)
+		return TRUE;
+	return FALSE;
+}
+
+static void
+unregister_vtable_reflection_type(MonoVTable *vtable)
+{
+	MonoObject *type = (MonoObject *)vtable->type;
+
+	if (type->vtable->klass != mono_defaults.runtimetype_class)
+		MONO_GC_UNREGISTER_ROOT_IF_MOVING(vtable->type);
+}
+
+static gboolean
+mono_domain_remove_unused_type_hash(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoType* mono_type = (MonoType*)key;
+	// MonoReflectionType* res = (MonoReflectionType *)value;
+	MonoImage* image = (MonoImage*)user_data;
+	MonoClass* mono_class = NULL;
+	if (mono_type->type == MONO_TYPE_CLASS || mono_type->type == MONO_TYPE_VALUETYPE)
+	{
+		mono_class = mono_type->data.klass;
+	}
+	else if (mono_type->type == MONO_TYPE_ARRAY)
+	{
+		mono_class = mono_type->data.array->eklass;
+	}
+	else if (mono_type->type == MONO_TYPE_GENERICINST)
+	{
+		mono_class = mono_type->data.generic_class->container_class;
+	}
+	else if (mono_type->type == MONO_TYPE_VAR || mono_type->type == MONO_TYPE_MVAR)
+	{
+		// todo
+		g_printerr("MONO_TYPE_VAR | MONO_TYPE_MVAR not release!!!");
+	}
+	else if (mono_type->type == MONO_TYPE_PTR)
+	{
+		// todo
+		g_printerr("MONO_TYPE_PTR not release!!!");
+	}
+	else if (mono_type->type == MONO_TYPE_FNPTR)
+	{
+		// todo
+		g_printerr("MONO_TYPE_FNPTR not release!!!");
+	}
+	if (mono_class && mono_class->image == image)
+	{
+		return TRUE;
+	}
+	return FALSE;
+
+}
+
+
+static gboolean
+mono_domain_ldstr_table_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	return TRUE;
+}
+
+
+static gboolean
+mono_domain_jit_code_hash_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoImage* image = (MonoImage*)user_data;
+	MonoMethod* method = (MonoMethod*)key;
+	if (method->klass && method->klass->image == image)
+	{
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static void
+mono_image_method_cache_foreach(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoRuntimeCallbacks* callbacks = mono_get_runtime_callbacks();
+	MonoDomain* domain = (MonoDomain*)user_data;
+	MonoMethod* method = (MonoMethod*)value;
+	if (callbacks && callbacks->free_method)
+	{
+		callbacks->free_method(domain, method);
+	}
+}
+
+
+void
+mono_domain_remove_unused_assembly(MonoAssembly* assembly)
+{
+	MonoDomain* domain = mono_domain_get();
+	mono_domain_profiler(domain);
+	// 先确保对象释放回收
+	mono_domain_code_gc_init(domain, assembly);
+	mono_domain_mempool_gc_init(domain, assembly);
+#if defined(HAVE_SGEN_GC)
+	mono_gc_finalize_assembly(assembly);
+	mono_gc_invoke_finalizers();
+#endif
+	// 注意一个 class 跨多个assembly的情况？
+	MonoImage* image = assembly->image;
+	GPtrArray* removed_class_vtable_array = g_ptr_array_new();
+	GPtrArray* removed_mono_class_array = g_ptr_array_new();
+	int i = 0;
+	// clear vtable
+	for (i = 0; i < domain->class_vtable_array->len; ++i)
+	{
+		MonoVTable* vtable = (MonoVTable *)g_ptr_array_index(domain->class_vtable_array, i);
+		if (vtable->klass->image == image)
+		{
+			g_ptr_array_add(removed_class_vtable_array, vtable);
+			g_ptr_array_add(removed_mono_class_array, vtable->klass);
+		}
+	}
+	// copy from unload_thread_main
+	for (i = 0; i < removed_class_vtable_array->len; ++i)
+		zero_static_data_for_unused_assembly((MonoVTable *)g_ptr_array_index(removed_class_vtable_array, i));
+	mono_gc_collect(0);
+
+	// remove vtable
+	for (i = 0; i < removed_class_vtable_array->len; ++i)
+	{
+		MonoVTable* removed_vtable = (MonoVTable *)g_ptr_array_index(removed_class_vtable_array, i);
+		clear_cached_vtable_for_unused_assembly(removed_vtable);
+		mono_domain_mempool_gc_collect(domain, removed_vtable->alloc_start, removed_vtable->alloc_size);
+		// remove vtable
+		MonoClass* klass = removed_vtable->klass;
+		gint32 class_size = mono_class_data_size(klass);
+		gint32 table_size = m_class_get_vtable_size(klass);
+		if (class_size > 0 && !m_class_has_static_refs(klass))
+		{
+			mono_domain_mempool_gc_collect(domain, removed_vtable->alloc_start, removed_vtable->alloc_size);
+			mono_domain_mempool_gc_collect(domain, removed_vtable->vtable[table_size], class_size);
+		}
+		// remove runtime_generic_context
+		if (removed_vtable->runtime_generic_context)
+		{
+			// NOTICE by dsqiu
+			// 从 mini-generic-sharing.c 中抄过来
+			// mono_class_rgctx_get_array_size(0, FALSE) = 4
+			guint32 size = 4 * sizeof(gpointer);
+			mono_domain_mempool_gc_collect(domain, removed_vtable->runtime_generic_context, size);
+		}
+
+		// remove from domain
+		g_ptr_array_remove(domain->class_vtable_array, removed_vtable);
+	}
+
+	deregister_reflection_info_roots_for_unused_assembly(domain, assembly);
+
+	mono_assembly_cleanup_domain_binding_for_unused_assembly(domain, assembly);
+	// mono_domain_free
+	// mono_debug_domain_unload
+	// special_static_fields
+	g_hash_table_foreach_remove(domain->special_static_fields, mono_domain_remove_unused_special_field, image);
+	// ldstr_table interned string remove all of them
+	mono_g_hash_table_foreach_remove(domain->ldstr_table, mono_domain_ldstr_table_remove, NULL);
+
+	// mono_reflection_cleanup_domain
+	mono_reflection_cleanup_for_unused_assembly(domain, assembly);
+	// unregister_vtable_reflection_type
+	for (i = 0; i < removed_class_vtable_array->len; ++i)
+		unregister_vtable_reflection_type((MonoVTable *)g_ptr_array_index(removed_class_vtable_array, i));
+
+	g_ptr_array_free(removed_class_vtable_array, FALSE);
+
+	// free_domain_hook: mini_free_jit_domain_info
+	mono_mini_remove_generic_sharing_for_unused_assembly(domain, assembly);
+	MonoEECallbacks* mono_ee_callbacks = mini_get_interp_callbacks();
+	if(mono_ee_callbacks && mono_ee_callbacks->interp_handle_for_unused_assembly)
+		mono_ee_callbacks->interp_handle_for_unused_assembly(domain, assembly);
+	mono_mini_remove_trampoline_for_unused_assembly(domain, assembly);
+	mono_mini_remove_runtime_info_for_unused_assembly(domain, assembly);
+	// type_hash
+	if (domain->type_hash)
+	{
+		mono_g_hash_table_foreach_remove(domain->type_hash, mono_domain_remove_unused_type_hash, image);
+	}
+	// type_init_exception_hash
+	if (domain->type_init_exception_hash)
+	{
+		for (i = 0; i < removed_mono_class_array->len; i++)
+		{
+			MonoException* exception = (MonoException*)mono_g_hash_table_lookup(domain->type_init_exception_hash, g_ptr_array_index(removed_mono_class_array, i));
+			if (exception)
+			{
+				mono_g_hash_table_remove(domain->type_init_exception_hash, exception);
+			}
+		}
+	}
+	g_ptr_array_free(removed_mono_class_array, FALSE);
+	// mono_assembly_release_gc_roots
+	mono_assembly_release_gc_roots(assembly);
+	// remote class ?a??ó|????ó?°é
+	// create_proxy_for_type_method
+	// private_invoke_method
+	// proxy_vtable_hash
+
+	// jit_code_hash
+	//DomainImageData domain_image_data;
+	//domain_image_data.image = image;
+	//domain_image_data.domain = domain;
+	mono_internal_hash_table_foreach_remove(&domain->jit_code_hash, mono_domain_jit_code_hash_remove, image);
+	// aot_modules:aot_moudles2??§3?èè?üD?￡?2?ó?′|àí?
+	if (domain->aot_modules)
+	{
+
+	}
+	// jit_info_table
+	if (domain->jit_info_table)
+	{
+		mono_jit_info_table_cleanup_for_unused_assembly(domain, assembly);
+	}
+
+	// generic_virtual_cases
+	mono_object_remove_gerneric_virtual_case_for_unused_assembly(domain, assembly);
+	// mono_assembly_close
+
+
+
+	
+	// proxy_vtable_hash: remote_class
+	// jit_code_hash: 
+	// aot_modules: aot 模块不支持更新，所以不用卸载
+	// jit_info_table
+	// finalizable_objects_hash:好像没用
+	// generic_virtual_cases:是jit的东西？
+
+	mono_domain_mempool_track_clear(domain, assembly);
+	mono_domain_code_track_clear(domain, assembly);
+
+	mono_assembly_close(assembly);
+	domain->domain_assemblies = g_slist_remove(domain->domain_assemblies, assembly);
+
+	mono_domain_code_gc_clear(domain, assembly);
+	mono_domain_mempool_gc_clear(domain, assembly);
+	mono_domain_profiler(domain);
+}
+
+// extend end

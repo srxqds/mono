@@ -225,6 +225,50 @@ typedef mono_bool (*MonoCoreClrPlatformCB) (const char *image_name);
 MONO_API void
 mono_security_set_core_clr_platform_callback (MonoCoreClrPlatformCB callback);
 
+// extend by dsqiu
+#define SUPPORT_UNLOAD_ASSEMBLY
+typedef struct {
+	MonoAssembly* assembly;
+	MonoDomain* domain;
+} _DomainAssemblyData;
+
+
+MONO_API void
+mono_domain_add_unloadable_assembly(MonoDomain* domain, const char* assembly_name);
+MONO_API void
+mono_domain_remove_unloadable_assembly(MonoDomain* domain, const char* assembly_name);
+void 
+mono_domain_method_mempool_track(MonoMethod* method, void* addr, uint32_t size, const char *file, const char* function, int line);
+void 
+mono_domain_method_code_track(MonoMethod* method, void* addr, uint32_t size, const char *file, const char* function, int line);
+void
+mono_domain_vtable_mempool_track(MonoVTable* vtable, void* addr, uint32_t size, const char *file, const char* function, int line);
+void
+mono_domain_vtable_code_track(MonoVTable* vtable, void* addr, uint32_t size, const char *file, const char* function, int line);
+void
+mono_domain_mempool_track_clear(MonoDomain* domain, MonoAssembly* assembly);
+void
+mono_domain_code_track_clear(MonoDomain* domain, MonoAssembly* assembly);
+
+#define mono_domain_method_mempool_track(method, addr, size) (mono_domain_method_mempool_track((method), (addr), (size), __FILE__, __func__, __LINE__));
+#define mono_domain_method_code_track(method, addr, size) (mono_domain_method_code_track((method), (addr), (size), __FILE__, __func__, __LINE__));
+#define mono_domain_vtable_mempool_track(vtable, addr, size) (mono_domain_vtable_mempool_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
+#define mono_domain_vtable_code_track(vtable, addr, size) (mono_domain_vtable_code_track((vtable), (addr), (size), __FILE__, __func__, __LINE__));
+void
+deregister_reflection_info_roots_for_unused_assembly(MonoDomain *domain, MonoAssembly* target);
+void 
+zero_static_data_for_unused_assembly(MonoVTable* vtable);
+void 
+clear_cached_vtable_for_unused_assembly(MonoVTable* vtable);
+
+void mono_domain_profiler(MonoDomain* domain);
+#define MEMPOOL_TRACE 1
+#define CODE_TRACE 2
+MONO_API void
+mono_domain_set_trace(int enable);
+
+// extend end
+
 MONO_END_DECLS
 
 #endif /* _MONO_METADATA_APPDOMAIN_H_ */

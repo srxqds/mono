@@ -2845,7 +2845,13 @@ fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContex
 			break;
 		}
 		if (!rgctx [offset + 0])
+		{
 			rgctx [offset + 0] = alloc_rgctx_array (domain, i + 1, is_mrgctx);
+			// extend by dsqiu
+			int track_size = mono_class_rgctx_get_array_size(i+1, is_mrgctx) * sizeof(gpointer);
+			mono_domain_vtable_mempool_track(class_vtable, rgctx[offset + 0], track_size);
+			// extend end
+		}
 		rgctx = (void **)rgctx [offset + 0];
 		first_slot += size - 1;
 		size = mono_class_rgctx_get_array_size (i + 1, is_mrgctx);
@@ -4438,3 +4444,48 @@ mini_method_to_shared (MonoMethod *method)
 }
 
 #endif /* !MONO_ARCH_GSHAREDVT_SUPPORTED */
+
+// extend by dsqiu
+
+static gboolean
+rgctx_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethodRuntimeGenericContext* gc = (MonoMethodRuntimeGenericContext*)value;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	if (gc->class_vtable->klass->image == data->assembly->image)
+	{
+		// copy from top
+		gint32 size = mono_class_rgctx_get_array_size(0, 1) * sizeof(gpointer);
+		mono_domain_mempool_gc_collect(data->domain, gc, size);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+gsharedvt_arg_tramp_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	return FALSE;
+}
+
+void mono_mini_remove_generic_sharing_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+{
+	_DomainAssemblyData user_data;
+	user_data.assembly = assembly;
+	user_data.domain = domain;
+	MonoJitDomainInfo *info = domain_jit_info(domain);
+	if (info->method_rgctx_hash)
+	{
+		g_hash_table_foreach_remove(info->method_rgctx_hash, rgctx_hash_foreach_remove, &user_data);
+	}
+	if (info->mrgctx_hash)
+	{
+		g_hash_table_foreach_remove(info->mrgctx_hash, rgctx_hash_foreach_remove, &user_data);
+	}
+
+	if (info->gsharedvt_arg_tramp_hash)
+	{
+		g_hash_table_foreach_remove(info->gsharedvt_arg_tramp_hash, gsharedvt_arg_tramp_hash_foreach_remove, &user_data);
+	}
+}
+// extend end

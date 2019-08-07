@@ -36,7 +36,11 @@ alloc_reflected_entry (MonoDomain *domain)
 	if (!mono_gc_is_moving ())
 		return g_new0 (ReflectedEntry, 1);
 	else
-		return (ReflectedEntry *)mono_mempool_alloc (domain->mp, sizeof (ReflectedEntry));
+		// return (ReflectedEntry *)mono_mempool_alloc(domain->mp, sizeof(ReflectedEntry));
+		// extend by dsqiu
+		return (ReflectedEntry *)mono_domain_alloc (domain, sizeof(ReflectedEntry));
+		// extend end
+		
 }
 
 static void

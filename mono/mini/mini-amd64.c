@@ -8075,6 +8075,9 @@ mono_arch_build_imt_trampoline (MonoVTable *vtable, MonoDomain *domain, MonoIMTC
 	else
 		code = (guint8 *)mono_domain_code_reserve (domain, size + MONO_TRAMPOLINE_UNWINDINFO_SIZE(0));
 	start = code;
+	// extend by dsqiu
+	mono_domain_vtable_code_track(vtable, code, size + MONO_TRAMPOLINE_UNWINDINFO_SIZE(0));
+	// extend end
 
 	unwind_ops = mono_arch_get_cie_program ();
 

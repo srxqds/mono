@@ -25,7 +25,7 @@ MONO_API void*            mono_code_manager_reserve_align (MonoCodeManager *cman
 
 MONO_API void*            mono_code_manager_reserve (MonoCodeManager *cman, int size);
 #define mono_code_manager_reserve(cman, size) (g_cast (mono_code_manager_reserve ((cman), (size))))
-MONO_API void             mono_code_manager_commit  (MonoCodeManager *cman, void *data, int size, int newsize);
+MONO_API mono_bool             mono_code_manager_commit  (MonoCodeManager *cman, void *data, int size, int newsize);
 MONO_API int              mono_code_manager_size    (MonoCodeManager *cman, int *used_size);
 MONO_API void             mono_code_manager_init (void);
 MONO_API void             mono_code_manager_cleanup (void);
@@ -34,6 +34,15 @@ MONO_API void             mono_code_manager_install_callbacks (MonoCodeManagerCa
 /* find the extra block allocated to resolve branches close to code */
 typedef int    (*MonoCodeManagerFunc)      (void *data, int csize, int size, void *user_data);
 void            mono_code_manager_foreach  (MonoCodeManager *cman, MonoCodeManagerFunc func, void *user_data);
+
+// extend by dsqiu
+MONO_API mono_bool
+mono_code_chunk_free(MonoCodeManager* cman, void* addr, int size);
+MONO_API void
+mono_code_manager_profiler(MonoCodeManager* cman);
+MONO_API void
+mono_code_set_reusable(MonoCodeManager *pool, mono_bool enable);
+// extend end
 
 #endif /* __MONO_CODEMAN_H__ */
 

@@ -2067,6 +2067,22 @@ mono_class_create_runtime_vtable (MonoDomain *domain, MonoClass *klass, MonoErro
 	/* If on interp, skip the interp interface table */
 	if (use_interpreter)
 		interface_offsets = (gpointer*)((char*)interface_offsets + imt_table_bytes / 2);
+	
+	// extend by dsqiu
+	vt->alloc_size = vtable_size;
+	// NOTICE: copy from alloc_vtable
+	size_t alloc_offset;
+	if (sizeof(gpointer) == 4 && (imt_table_bytes & 7)) {
+		g_assert((imt_table_bytes & 7) == 4);
+		vtable_size += 4;
+		alloc_offset = 4;
+	}
+	else {
+		alloc_offset = 0;
+	}
+	vt->alloc_start = (gpointer*)((char*)interface_offsets - alloc_offset);
+	// extend end
+	
 	g_assert (!((gsize)vt & 7));
 
 	vt->klass = klass;
@@ -9201,3 +9217,30 @@ Type mono_array_get_internal (MonoArray *array, Type element_type, uintptr_t ind
 {
 }
 #endif
+// extend by dsqiu
+
+
+static gboolean
+mono_object_remove_generic_virtual_case(gpointer key, gpointer value, gpointer user_data)
+{
+	GenericVirtualCase* vc = (GenericVirtualCase*)value;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	if (vc && vc->method->klass->image == data->assembly->image)
+	{
+		mono_domain_mempool_gc_collect(data->domain, value, sizeof(GenericVirtualCase));
+		return TRUE;
+	}
+	return FALSE;
+}
+
+void mono_object_remove_gerneric_virtual_case_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+{
+	if (domain && domain->generic_virtual_cases)
+	{
+		_DomainAssemblyData user_data;
+		user_data.assembly = assembly;
+		user_data.domain = domain;
+		g_hash_table_foreach_remove(domain->generic_virtual_cases, mono_object_remove_generic_virtual_case, &user_data);
+	}
+}
+// extend end

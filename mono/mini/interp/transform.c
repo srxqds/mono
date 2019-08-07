@@ -5507,7 +5507,10 @@ generate (MonoMethod *method, MonoMethodHeader *header, InterpMethod *rtm, MonoG
 	rtm->vt_stack_size = td->max_vt_sp;
 	rtm->total_locals_size = td->total_locals_size;
 	rtm->alloca_size = rtm->total_locals_size + rtm->args_size + rtm->vt_stack_size + rtm->stack_size;
-	rtm->data_items = (gpointer*)mono_domain_alloc0 (domain, td->n_data_items * sizeof (td->data_items [0]));
+	// extend by dsqiu
+	rtm->data_size = td->n_data_items * sizeof(td->data_items[0]);
+	// extend end
+	rtm->data_items = (gpointer*)mono_domain_alloc0 (domain, td->n_data_items * sizeof (td->data_items [0])); // check by dsqiu
 	memcpy (rtm->data_items, td->data_items, td->n_data_items * sizeof (td->data_items [0]));
 
 	/* Save debug info */

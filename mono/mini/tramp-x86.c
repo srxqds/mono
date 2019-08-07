@@ -45,7 +45,10 @@ mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
 	MonoDomain *domain = mono_domain_get ();
 	GSList *unwind_ops;
 
-	start = code = mono_domain_code_reserve (domain, size);
+	start = code = mono_domain_code_reserve (domain, size); // check by dsqiu
+	// extend by dsqiu
+	mono_domain_method_code_track(m, code, size);
+	// extend end
 
 	unwind_ops = mono_arch_get_cie_program ();
 

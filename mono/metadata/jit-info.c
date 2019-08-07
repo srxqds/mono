@@ -1032,3 +1032,117 @@ mono_jit_info_get_unwind_info (MonoJitInfo *ji)
 		return NULL;
 	}
 }
+
+
+// extend by dsqiu
+
+static void
+mono_jit_info_remove_for_method(MonoDomain* domain, MonoJitInfo *jit_info)
+{
+	MonoMethod* method = mono_jit_info_get_method(jit_info);
+
+	MonoGenericJitInfo *gi = mono_jit_info_get_generic_jit_info(jit_info);
+	// free generic_sharing_context
+	if (gi)
+	{
+		if (gi->generic_sharing_context)
+		{
+			mono_domain_mempool_gc_collect(domain, gi->generic_sharing_context, sizeof(MonoGenericSharingContext));
+		}
+		if (gi->locations)
+		{
+			mono_domain_mempool_gc_collect(domain, gi->locations, gi->nlocs * sizeof(MonoDwarfLocListEntry));
+		}
+	}
+	
+	mono_domain_code_gc_collect(domain, jit_info->code_start, jit_info->code_alloc > jit_info->code_size ? jit_info->code_alloc : jit_info->code_size);
+	mono_domain_mempool_gc_collect(domain, jit_info, jit_info->alloc_size);
+	// mini-trampolines.c:1491
+	jit_info_table_remove(domain->jit_info_table, jit_info);
+}
+
+void mono_jit_info_table_cleanup_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+{
+	if (!domain->jit_info_table)
+		return;
+	MonoJitInfoTable* table = domain->jit_info_table;
+	MonoImage* image = assembly->image;
+	int i;
+	int num_chunks = table->num_chunks;
+
+	mono_domain_lock(domain);
+
+	GPtrArray* removed_jit_info_table_array = g_ptr_array_new();
+	for (i = 0; i < num_chunks; ++i) {
+		MonoJitInfoTableChunk *chunk = table->chunks[i];
+		MonoJitInfo *jit_info;
+		int num_elements = chunk->num_elements;
+		for (int index = 0; index < num_elements; index++)
+		{
+			jit_info = chunk->data[index];
+			if (IS_JIT_INFO_TOMBSTONE(jit_info))
+				continue;
+			// ¨¨???¦Ì?2?D¨¨¨°a??¨º?
+			if (jit_info->is_trampoline)
+			{
+				// todo
+				// free MonoTrampInfo and MonoJitInfo
+				continue;
+			}
+			else if (jit_info->is_interp)  // ?¨² interp.c ?D¨º¨ª¡¤???¨º?
+			{
+				continue;
+			}
+			// aot 2?D¨¨¨°a??¨º?
+			else if (jit_info->async)
+			{
+				continue;
+			}
+			else if (jit_info->d.method->klass->image == image && !jit_info->d.method->dynamic)  // method
+			{
+				g_ptr_array_add(removed_jit_info_table_array, jit_info);
+			}
+		}
+	}
+	for (int index = 0; index < removed_jit_info_table_array->len; index++)
+	{
+		MonoJitInfo *jit_info = (MonoJitInfo*) g_ptr_array_index(removed_jit_info_table_array, index);
+		mono_jit_info_remove_for_method(domain, jit_info);
+	}
+	g_ptr_array_free(removed_jit_info_table_array, FALSE);
+	mono_domain_unlock(domain);
+
+}
+
+void mono_domain_remove_jit_info_for_method(MonoDomain* domain, MonoMethod* method)
+{
+	if (!method)
+		return;
+	if (!domain->jit_info_table)
+		return;
+	MonoJitInfoTable* table = domain->jit_info_table;
+	int i;
+	int num_chunks = table->num_chunks;
+
+	mono_domain_lock(domain);
+
+	GPtrArray* removed_jit_info_table_array = g_ptr_array_new();
+	for (i = 0; i < num_chunks; ++i) {
+		MonoJitInfoTableChunk *chunk = table->chunks[i];
+		MonoJitInfo *jit_info;
+		int num_elements = chunk->num_elements;
+		for (int index = 0; index < num_elements; index++)
+		{
+			jit_info = chunk->data[index];
+			if (!IS_JIT_INFO_TOMBSTONE(jit_info) && !jit_info->is_trampoline && !jit_info->async && jit_info->d.method == method && !jit_info->d.method->dynamic)  // method
+			{
+				mono_jit_info_remove_for_method(domain, jit_info);
+				break;
+			}
+		}
+	}
+	mono_domain_unlock(domain);
+
+}
+
+// extend end

@@ -4936,3 +4936,51 @@ mono_asmctx_get_name (const MonoAssemblyContext *asmctx)
 	g_assert (asmctx->kind >= 0 && asmctx->kind <= MONO_ASMCTX_LAST);
 	return names [asmctx->kind];
 }
+
+
+// extend by dsqiu
+// 没有验证过
+void mono_assembly_cleanup_domain_binding_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+{
+	GSList **iter;
+	MonoAssemblyName aname = assembly->aname;
+	mono_assembly_binding_lock();
+	iter = &loaded_assembly_bindings;
+	gint32 domain_id = domain->domain_id;
+	while (*iter) {
+		GSList *l = *iter;
+		MonoAssemblyBindingInfo *info = (MonoAssemblyBindingInfo *)l->data;
+
+		if (info->domain_id == domain_id && strcmp(aname.name, info->name) && aname.major == info->major && aname.minor == info->minor) {
+			*iter = l->next;
+			mono_assembly_binding_info_free(info);
+			g_free(info);
+			g_slist_delete_link(loaded_assembly_bindings, l);
+			break;
+		}
+		else {
+			iter = &l->next;
+		}
+	}
+	mono_assembly_binding_unlock();
+
+	//
+	MonoAssemblyBindingInfo *info;
+	GSList *list;
+
+	if (!domain->assembly_bindings)
+		return;
+
+	for (list = domain->assembly_bindings; list; list = list->next) {
+		info = (MonoAssemblyBindingInfo *)list->data;
+		if (info && domain_id == domain->domain_id && strcmp(aname.name, info->name) == 0 && strcmp(aname.culture, info->culture) == 0)
+		{
+			mono_domain_mempool_gc_collect(domain, info, sizeof(MonoAssemblyBindingInfo));
+			mono_domain_strdup_collect(domain, info->name);
+			mono_domain_strdup_collect(domain, info->culture);
+			mono_domain_mempool_gc_collect(domain, list, sizeof(GList));
+			domain->assembly_bindings = g_slist_remove_link(domain->assembly_bindings, list);
+		}
+	}
+}
+// extend end

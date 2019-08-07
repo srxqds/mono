@@ -54,6 +54,16 @@
 #define G_UNLIKELY(a) (a)
 #endif
 
+
+// extend by dsqiu
+typedef struct _MonoUnusedEntity {
+	struct _MonoUnusedEntity* next;
+	guint32 size;
+	guint8* pos;
+} MonoUnusedEntity;
+
+// extend end
+
 // A mempool is a linked list of memory blocks, each of which begins with this header structure.
 // The initial block in the linked list is special, and tracks additional information.
 struct _MonoMemPool {
@@ -69,6 +79,13 @@ struct _MonoMemPool {
 	// Used in "initial block" only: End of current free space in mempool (ie, the first byte following the end of usable space)
 	guint8 *end;
 
+	// extend by dsqiu
+
+	mono_bool reusable;
+	// empty->empty->unused_memory->unused_memory
+	MonoUnusedEntity* unuseds;
+	// extend end
+
 	union {
 		// Unused: Imposing floating point memory rules on _MonoMemPool's final field ensures proper alignment of whole header struct
 		double pad;
@@ -79,6 +96,233 @@ struct _MonoMemPool {
 };
 
 static gint64 total_bytes_allocated = 0;
+
+// extend by dsqiu
+static void
+mono_mempool_unused_destroy(MonoUnusedEntity* unused_entity)
+{
+	MonoUnusedEntity *p, *n;
+	p = unused_entity;
+	while (p) {
+		n = p->next;
+		g_free(p);
+		p = n;
+	}
+}
+
+static MonoUnusedEntity*
+mono_mempool_unused_new()
+{
+	MonoUnusedEntity* unused_entity = (MonoUnusedEntity *)g_malloc(sizeof(MonoUnusedEntity));
+	unused_entity->pos = NULL;
+	unused_entity->size = 0;
+	unused_entity->next = NULL;
+	return unused_entity;
+}
+static void
+mono_mempool_unused_recycle(MonoMemPool* root, MonoUnusedEntity* reuse_entity)
+{
+	reuse_entity->pos = NULL;
+	reuse_entity->size = 0;
+	MonoUnusedEntity* unused_list = root->unuseds;
+	while (unused_list)
+	{
+		if (unused_list->next == reuse_entity)
+		{
+			unused_list->next = reuse_entity->next;
+			reuse_entity->next = NULL;
+			break;
+		}
+		unused_list = unused_list->next;
+	}
+	if (reuse_entity != root->unuseds)
+	{
+		reuse_entity->next = root->unuseds;
+		root->unuseds = reuse_entity;
+	}
+}
+
+static void
+mono_mempool_unused_status(MonoMemPool* pool)
+{
+	if (!pool || !pool->reusable)
+		return;
+	// print status
+	int count = 0;
+	guint32 still_free = 0;
+	int empty_count = 0;
+
+	MonoUnusedEntity* unuseds = pool->unuseds;
+	while (unuseds)
+	{
+		still_free += unuseds->size;
+		if (unuseds->size == 0)
+			empty_count += 1;
+		count += 1;
+		unuseds = unuseds->next;
+
+	}
+	g_print("mono_mempool_unused_status count: %d, empty: %d, size: %d\n", count, empty_count, still_free);
+}
+
+static int mono_mempool_is_loop(MonoMemPool* pool)
+{
+	MonoUnusedEntity* slow = pool->unuseds;
+	MonoUnusedEntity* fast = NULL;
+	if (slow)
+	{
+		fast = slow->next;
+	}
+	while (slow && fast)
+	{
+		if (slow == fast)
+		{
+			g_print("mono_mempool_is_loop with size: %d addr: %p\n", slow->size, slow->pos);
+			g_assert_not_reached();
+			return TRUE;
+		}
+		slow = slow->next;
+		fast = fast->next;
+		if (fast)
+			fast = fast->next;
+	}
+	return FALSE;
+}
+
+// insert free memory to unuseds
+static gboolean
+mono_mempool_unused_insert(MonoMemPool* root, guint8* addr, gint32 size, MonoMemPool* pool)
+{
+	MonoUnusedEntity* new_entity = NULL;
+	if (!root->unuseds)
+	{
+		root->unuseds = mono_mempool_unused_new();
+		root->unuseds->pos = addr;
+		root->unuseds->size = size;
+		return TRUE;
+	}
+	guint8* pool_end = (guint8*)pool + pool->size;
+	guint8* pool_start = (guint8*)pool +SIZEOF_MEM_POOL;
+	MonoUnusedEntity* unused_list = root->unuseds;
+	// check if has adjacent entity, join
+	while (unused_list)
+	{
+		guint8* pre_addr = unused_list->pos;
+		if (pre_addr >= pool_start && pre_addr < pool_end)
+		{
+			if (addr == pre_addr || (pre_addr < addr && pre_addr + unused_list->size > addr))
+			{
+				g_print("Free memory repeatly addr: %p\n", addr);
+				return FALSE;
+			}
+			if (unused_list->pos + unused_list->size == addr)
+			{
+				unused_list->size += size;
+				// check next entity if adjacent
+				MonoUnusedEntity* next_entity = unused_list->next;
+				if (next_entity && next_entity->pos >= pool_start && next_entity->pos < pool_end && ((guint8*)(next_entity->pos) == (guint8*)(unused_list->pos) + unused_list->size))
+				{
+					unused_list->size += next_entity->size;
+					mono_mempool_unused_recycle(root, next_entity);
+					// mono_mempool_is_loop(root);
+				}
+				return TRUE;
+			}
+			else if (addr + size == unused_list->pos)
+			{
+				unused_list->pos = addr;
+				unused_list->size += size;
+				return TRUE;
+			}
+		}
+		unused_list = unused_list->next;
+	}
+	if (root->unuseds->pos)
+	{
+		new_entity = mono_mempool_unused_new();
+	}
+	else
+	{
+		new_entity = root->unuseds;
+		root->unuseds = new_entity->next;
+		new_entity->next = NULL;
+	}
+	new_entity->size = size;
+	new_entity->pos = addr;
+	unused_list = root->unuseds;
+	MonoUnusedEntity* pre_entity = NULL;
+	// sort insert 
+	while (unused_list)
+	{
+		guint8* pre_addr = unused_list->pos;
+		if (pre_addr > addr)
+		{
+			break;
+		}
+		pre_entity = unused_list;
+		unused_list = unused_list->next;
+	}
+	if (pre_entity)
+	{
+		new_entity->next = pre_entity->next;
+		pre_entity->next = new_entity;
+	}
+	else
+	{
+		new_entity->next = root->unuseds;
+		root->unuseds = new_entity;
+	}
+	// mono_mempool_is_loop(root);
+	return TRUE;
+}
+
+
+static gpointer
+mono_mempool_unused_fetch(MonoMemPool* root, guint32 size)
+{
+	if (!root->reusable)
+		return NULL;
+	MonoUnusedEntity* unused_list = root->unuseds;
+	// MonoUnusedEntity* pre_entity = NULL;
+	MonoUnusedEntity* reuse_entity = NULL;
+	guint32 resue_size = MONO_MEMPOOL_PREFER_INDIVIDUAL_ALLOCATION_SIZE + 1;
+	while (unused_list)
+	{
+		if (unused_list->pos)
+		{
+			if (unused_list->size == size)
+			{
+				reuse_entity = unused_list;
+				break;
+			}
+			else if (unused_list->size > size && resue_size > unused_list->size)
+			{
+				resue_size = unused_list->size;
+				reuse_entity = unused_list;
+			}
+		}
+		// pre_entity = unused_list;
+		unused_list = unused_list->next;
+	}
+	if (reuse_entity)
+	{
+		gpointer rval = reuse_entity->pos;
+		if (reuse_entity->size != size)
+		{
+			reuse_entity->pos = reuse_entity->pos + size;
+			reuse_entity->size -= size;
+		}
+		else  // remove from list and insert header
+		{
+			mono_mempool_unused_recycle(root, reuse_entity);
+		}
+		
+		return rval;
+	}
+	return NULL;
+}
+
+// extend end
 
 /**
  * mono_mempool_new:
@@ -115,6 +359,10 @@ mono_mempool_new_size (int initial_size)
 	pool->pos = (guint8*)pool + SIZEOF_MEM_POOL; // Start after header
 	pool->end = (guint8*)pool + initial_size;    // End at end of allocated space 
 	pool->d.allocated = pool->size = initial_size;
+	// extend by dsqiu
+	pool->unuseds = NULL;
+	pool->reusable = FALSE;
+	// extend end
 	UnlockedAdd64 (&total_bytes_allocated, initial_size);
 	return pool;
 }
@@ -128,6 +376,10 @@ mono_mempool_new_size (int initial_size)
 void
 mono_mempool_destroy (MonoMemPool *pool)
 {
+	// extend by dsqiu
+	mono_mempool_unused_destroy(pool->unuseds);
+	// extend end
+
 	MonoMemPool *p, *n;
 
 	UnlockedSubtract64 (&total_bytes_allocated, pool->d.allocated);
@@ -278,6 +530,12 @@ gpointer
 	if (G_UNLIKELY (pool->pos >= pool->end)) {
 		pool->pos -= size;  // Back out
 
+		// extend by dsqiu
+		rval = mono_mempool_unused_fetch(pool, size);
+		if (rval)
+			return rval;
+		// extend end
+
 		// For large objects, allocate the object into its own block.
 		// (In individual allocation mode, the constant will be 0 and this path will always be taken)
 		if (size >= MONO_MEMPOOL_PREFER_INDIVIDUAL_ALLOCATION_SIZE) {
@@ -295,7 +553,12 @@ gpointer
 			// Notice: any unused memory at the end of the old head becomes simply abandoned in this case until the mempool is freed (see Bugzilla #35136)
 			guint new_size = get_next_size (pool, size);
 			MonoMemPool *np = (MonoMemPool *)g_malloc (new_size);
-
+			// extend by dsqiu
+			if (pool->reusable && pool->pos < pool->end)
+			{
+				mono_mempool_free(pool, pool->pos, pool->end - pool->pos);
+			}
+			// extend end
 			np->next = pool->next;
 			np->size = new_size;
 			pool->next = np;
@@ -329,6 +592,9 @@ gpointer
 
 	// If that doesn't work fall back on mono_mempool_alloc to handle new chunk allocation
 	if (G_UNLIKELY (pool->pos >= pool->end)) {
+		// extend by dsqiu
+		pool->pos -= size;  // Back out
+		// extend end
 		rval = mono_mempool_alloc (pool, size);
 	}
 #ifdef TRACE_ALLOCATIONS
@@ -434,3 +700,85 @@ mono_mempool_get_bytes_allocated (void)
 {
 	return UnlockedRead64 (&total_bytes_allocated);
 }
+
+
+// extend by dsqiu
+mono_bool
+mono_mempool_free(MonoMemPool* pool, void* addr, uint32_t size)
+{
+	if (!pool->reusable)
+		return FALSE;
+	MonoMemPool *p = pool;
+	MonoMemPool *start = NULL;
+	while (p) {
+		if (addr >= (gpointer)((guint8*)pool + SIZEOF_MEM_POOL) && addr < (gpointer)((guint8*)p + p->size))
+		{
+			start = p;
+			break;
+		}
+		p = p->next;
+	}
+	if (!start)
+		return FALSE;
+	size = ALIGN_SIZE(size);
+	
+	return mono_mempool_unused_insert(pool, addr, size, start);
+	// print status
+	/*mono_bool res = mono_mempool_unused_insert(pool, addr, size, start);
+	 if(res)
+ 		   g_print("mono_mempool_free size: %d\n", size);
+	mono_mempool_unused_status(pool);
+	return res;*/
+}
+
+long
+mono_mempool_strdup_free(MonoMemPool *pool, const char* value)
+{
+	if (!value)
+		return 0;
+	if (!mono_mempool_contains_addr(pool, (void*)value))
+		return 0;
+	long len = strlen(value);
+	mono_mempool_free(pool, (void*)value, len + 1);
+	return len;
+}
+
+void 
+momo_mempool_profiler(MonoMemPool *pool)
+{
+	if (!pool)
+		return;
+	MonoMemPool *p;
+	int count = 0;
+	guint32 still_free = 0;
+
+	p = pool;
+	while (p) {
+		p = p->next;
+		count++;
+	}
+	MonoUnusedEntity* unuseds = pool->unuseds;
+	int unused_count = 0;
+	while (unuseds)
+	{
+		still_free += unuseds->size;
+		unused_count++;
+		unuseds = unuseds->next;
+	}
+	still_free += pool->end - pool->pos;
+	g_print("Mempool %p stats:\n", pool);
+	g_print("Total mem allocated: %d\n", pool->d.allocated);
+	g_print("Num chunks: %d\n", count);
+	g_print("Num unuseds: %d\n", unused_count);
+	g_print("Free memory: %d\n", still_free);
+	g_print("Real used: %d\n", pool->d.allocated - still_free);
+	g_print("\n");
+	
+}
+
+void
+mono_mempool_set_reusable(MonoMemPool *pool, mono_bool enable)
+{
+	pool->reusable = enable;
+}
+// extend end

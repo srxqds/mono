@@ -6529,6 +6529,76 @@ interp_stop_single_stepping (void)
 	ss_enabled = FALSE;
 }
 
+// extend by dsqiu
+static gboolean
+interp_code_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethod* method = (MonoMethod*)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	InterpMethod* interp_method = (InterpMethod*)value;
+	MonoImage* image = data->assembly->image;
+	if (method->klass->image == image)
+	{
+		MonoDomain* domain = data->domain;
+		MonoMethodSignature *sig = mono_method_signature_internal(method);
+		mono_domain_mempool_gc_collect(domain, interp_method, sizeof(InterpMethod));
+		mono_domain_mempool_gc_collect(domain, interp_method->param_types, sizeof(MonoType*) * sig->param_count);
+		// generate transform.c
+		if (interp_method->clauses)
+		{
+			mono_domain_mempool_gc_collect(domain, interp_method->clauses, interp_method->num_clauses * sizeof(MonoExceptionClause));
+		}
+		if (interp_method->code)
+		{
+			MonoJitInfo* jitinfo = interp_method->jinfo;
+			int code_len = jitinfo->code_size;
+			mono_domain_mempool_gc_collect(domain, interp_method->code, sizeof(gushort)*code_len);
+			int jinfo_len = mono_jit_info_size((MonoJitInfoFlags)0, interp_method->num_clauses, 0);
+			mono_domain_mempool_gc_collect(domain, interp_method->jinfo, jinfo_len);
+		}
+		if (interp_method->data_items)
+		{
+			mono_domain_mempool_gc_collect(domain, interp_method->data_items, interp_method->data_size);
+		}
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+interp_method_pointer_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data)
+{
+	MonoMethod* method = (MonoMethod*)key;
+	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
+	InterpMethod* interp_method = (InterpMethod*)value;
+	MonoImage* image = data->assembly->image;
+	if (interp_method->method->klass->image == image)
+	{
+		// todo remove addr
+		// NOTICE by dsqiu
+		return TRUE;
+	}
+	return FALSE;
+}
+
+void
+mono_mini_remove_interp_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly)
+{
+	MonoImage* image = assembly->image;
+	_DomainAssemblyData user_data;
+	user_data.assembly = assembly;
+	user_data.domain = domain;
+	MonoJitDomainInfo *info = domain_jit_info(domain);
+	mono_internal_hash_table_foreach_remove(&info->interp_code_hash, interp_code_hash_foreach_remove, &user_data);
+	if (info->interp_method_pointer_hash)
+	{
+		g_hash_table_foreach_remove(info->interp_method_pointer_hash, interp_method_pointer_hash_foreach_remove, &user_data);
+	}
+}
+
+
+// extend end
+
 void
 mono_ee_interp_init (const char *opts)
 {
@@ -6575,5 +6645,9 @@ mono_ee_interp_init (const char *opts)
 	c.frame_arg_set_storage = interp_frame_arg_set_storage;
 	c.start_single_stepping = interp_start_single_stepping;
 	c.stop_single_stepping = interp_stop_single_stepping;
+	
+	// extend by dsqiu
+	c.interp_handle_for_unused_assembly = mono_mini_remove_interp_for_unused_assembly;
+	// extend end
 	mini_install_interp_callbacks (&c);
 }

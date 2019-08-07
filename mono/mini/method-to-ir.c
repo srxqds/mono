@@ -1,4 +1,4 @@
-/**
+﻿/**
  * \file
  * Convert CIL to the JIT internal representation
  *
@@ -6683,7 +6683,10 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 				use_aotconst = TRUE;
 #endif
 			/* FIXME: we should really allocate this only late in the compilation process */
-			f = (float *)mono_domain_alloc (cfg->domain, sizeof (float));
+			// extend by dsqiu
+			// f = (float *)mono_domain_alloc (cfg->domain, sizeof (float));
+			f = (float*)mono_mempool_alloc(cfg->mempool, sizeof(float));
+			// extend end
 
 			if (use_aotconst) {
 				MonoInst *cons;
@@ -6716,7 +6719,10 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 #endif
 
 			/* FIXME: we should really allocate this only late in the compilation process */
-			d = (double *)mono_domain_alloc (cfg->domain, sizeof (double));
+			// d = (double *)mono_domain_alloc (cfg->domain, sizeof (double));
+			// extend by dsqiu
+			d = (double*)mono_mempool_alloc(cfg->mempool, sizeof(double));
+			// extend end
 
 			if (use_aotconst) {
 				MonoInst *cons;

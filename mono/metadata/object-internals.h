@@ -2328,4 +2328,8 @@ mono_gc_wbarrier_value_copy_internal (void* dest, /*const*/ void* src, int count
 void
 mono_gc_wbarrier_object_copy_internal (MonoObject* obj, MonoObject *src);
 
+// extend by dsqiu
+void mono_object_remove_gerneric_virtual_case_for_unused_assembly(MonoDomain* domain, MonoAssembly* assembly);
+// extend end
+
 #endif /* __MONO_OBJECT_INTERNALS_H__ */

@@ -5312,9 +5312,11 @@ mono_arch_build_imt_trampoline (MonoVTable *vtable, MonoDomain *domain, MonoIMTC
 	if (fail_tramp)
 		buf = (guint8*)mono_method_alloc_generic_virtual_trampoline (domain, buf_len);
 	else
-		buf = mono_domain_code_reserve (domain, buf_len);
+		buf = mono_domain_code_reserve (domain, buf_len);  // check by dsqiu
 	code = buf;
-
+	// extend by dsqiu
+	mono_domain_vtable_code_track(vtable, code, buf_len);
+	// extend end
 	/*
 	 * We are called by JITted code, which passes in the IMT argument in
 	 * MONO_ARCH_RGCTX_REG (r27). We need to preserve all caller saved regs

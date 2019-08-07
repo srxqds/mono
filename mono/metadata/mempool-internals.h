@@ -84,4 +84,9 @@ mono_mempool_strdup_printf (MonoMemPool *pool, const char *format, ...) MONO_ATT
 long
 mono_mempool_get_bytes_allocated (void);
 
+// extend by dsqiu
+long
+mono_mempool_strdup_free(MonoMemPool *pool, const char* value);
+// extend end
+
 #endif

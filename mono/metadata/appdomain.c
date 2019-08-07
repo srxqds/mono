@@ -3070,3 +3070,50 @@ exit:
 	unload_data_unref (thread_data);
 	HANDLE_FUNCTION_RETURN ();
 }
+
+
+// extend by dsqiu
+void
+deregister_reflection_info_roots_for_unused_assembly(MonoDomain *domain, MonoAssembly* target)
+{
+	GSList *list;
+
+	mono_domain_assemblies_lock(domain);
+	for (list = domain->domain_assemblies; list; list = list->next) {
+		MonoAssembly *assembly = (MonoAssembly *)list->data;
+		if (target != assembly)
+		{
+			continue;
+		}
+		MonoImage *image = assembly->image;
+		int i;
+
+		/*
+		 * No need to take the image lock here since dynamic images are appdomain bound and
+		 * at this point the mutator is gone.  Taking the image lock here would mean
+		 * promoting it from a simple lock to a complex lock, which we better avoid if
+		 * possible.
+		 */
+		if (image_is_dynamic(image))
+			deregister_reflection_info_roots_from_list(image);
+
+		for (i = 0; i < image->module_count; ++i) {
+			MonoImage *module = image->modules[i];
+			if (module && image_is_dynamic(module))
+				deregister_reflection_info_roots_from_list(module);
+		}
+	}
+	mono_domain_assemblies_unlock(domain);
+}
+
+void zero_static_data_for_unused_assembly(MonoVTable* vtable)
+{
+	zero_static_data(vtable);
+}
+
+void clear_cached_vtable_for_unused_assembly(MonoVTable* vtable)
+{
+	clear_cached_vtable(vtable);
+}
+
+// extend end

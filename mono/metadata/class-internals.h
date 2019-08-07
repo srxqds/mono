@@ -1,4 +1,4 @@
-/**
+﻿/**
  * \file
  * Copyright 2012 Xamarin Inc
  * Licensed under the MIT license. See LICENSE file in the project root for full license information.
@@ -353,6 +353,11 @@ struct MonoVTable {
 	MonoRuntimeGenericContext *runtime_generic_context;
 	/* interp virtual method table */
 	gpointer *interp_vtable;
+	// extend by dsqiu
+	// NOTICE:remote class不支持
+	gpointer* alloc_start;
+	guint32 alloc_size;
+	// extend end
 	/* do not add any fields after vtable, the structure is dynamically extended */
 	/* vtable contains function pointers to methods or their trampolines, at the
 	 end there may be a slot containing the pointer to the static fields */
