@@ -2065,6 +2065,14 @@ mono_domain_get_assemblies (MonoDomain *domain, gboolean refonly)
 
 // extend by dsqiu
 static int trace_enabled = FALSE;
+static int trace_log = 0;
+
+
+void
+mono_domain_set_trace_log(int log)
+{
+	trace_log = log;
+}
 
 static void 
 mono_domain_add_mem_track(gpointer addr, guint size)
@@ -2081,7 +2089,8 @@ mono_domain_add_mem_track(gpointer addr, guint size)
 			_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
 			if (value->addr == addr)
 			{
-				g_print("mono_domain_add_mem_track with size: %d addr: %p\n", size, addr);
+				if(trace_log & TRACE_LOG_PRINT)
+					g_print("mono_domain_add_mem_track with size: %d addr: %p\n", size, addr);
 				g_assert_not_reached();
 			}
 		}
@@ -2089,7 +2098,8 @@ mono_domain_add_mem_track(gpointer addr, guint size)
 	_GCEntity* value = g_new0(_GCEntity, 1);
 	value->addr = addr;
 	value->size = size;
-	g_print("mono_domain_add_mem_track with size: %d addr: %p\n", size, addr);
+	if (trace_log & TRACE_LOG_PRINT)
+		g_print("mono_domain_add_mem_track with size: %d addr: %p\n", size, addr);
 	g_ptr_array_add(mem_addr_size_tracks, value);
 }
 
@@ -2106,7 +2116,8 @@ mono_domain_remove_mem_track(gpointer addr, guint size)
 		{
 			if (value->addr == addr && value->size != size)
 			{
-				g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
+				if (trace_log & TRACE_LOG_PRINT)
+					g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
 				g_assert_not_reached();
 			}
 		}
@@ -2114,7 +2125,8 @@ mono_domain_remove_mem_track(gpointer addr, guint size)
 		{
 			g_free(value);
 			g_ptr_array_remove_index(mem_addr_size_tracks, i);
-			g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
+			if (trace_log & TRACE_LOG_PRINT)
+				g_print("mono_domain_remove_mem_track with size: %d addr: %p\n", size, addr);
 			return;
 		}
 	}
@@ -2131,13 +2143,14 @@ mono_domain_diff_mem_track()
 	if (!mem_addr_size_tracks)
 		return;
 	int i = 0;
-	g_print("mono_domain_diff_mem_track size %d: \n", mem_addr_size_tracks->len);
+	if (trace_log & TRACE_LOG_STATS)
+		g_print("mono_domain_diff_mem_track size %d: \n", mem_addr_size_tracks->len);
 	for (i = 0; i < mem_addr_size_tracks->len; i++)
 	{
 		_GCEntity* value = (_GCEntity*)g_ptr_array_index(mem_addr_size_tracks, i);
-		g_print("size %d addr %p\n", value->size, value->addr);
+		if (trace_log & TRACE_LOG_STATS)
+			g_print("size %d addr %p\n", value->size, value->addr);
 	}
-	g_print("\n");
 }
 
 static void mono_domain_clear_mem_track()
@@ -2174,7 +2187,7 @@ mono_domain_mempool_free(MonoDomain *domain, void* addr, guint size)
 	if (trace_enabled & MEMPOOL_TRACE)
 	{
 		mono_domain_remove_mem_track(addr, size);
-		if(res)
+		if(res && (trace_log & TRACE_LOG_PRINT))
 			g_print("mono_domain_mempool_free with size %d addr %p\n", size, addr);
 	}
 }
@@ -2188,7 +2201,7 @@ mono_domain_code_free(MonoDomain* domain, void* addr, guint size)
 	if (trace_enabled & CODE_TRACE)
 	{
 		mono_domain_remove_mem_track(addr, size);
-		if(res)
+		if(res && (trace_log & TRACE_LOG_PRINT))
 			g_print("mono_domain_code_free with size %d addr %p\n", size, addr);
 	}
 }
@@ -2223,7 +2236,7 @@ void
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
-	if (trace_enabled & MEMPOOL_TRACE)
+	if ((trace_enabled & MEMPOOL_TRACE) && (trace_log & TRACE_LOG_PRINT))
 		g_print("mono_domain_mempool_gc_collect with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 	g_ptr_array_add(mempool_gc_collects, entity);
 }
@@ -2234,7 +2247,7 @@ void
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
-	if (trace_enabled & CODE_TRACE)
+	if ((trace_enabled & CODE_TRACE) && (trace_log & TRACE_LOG_PRINT))
 		g_print("mono_domain_code_gc_collect with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 
 	g_ptr_array_add(code_gc_collects, entity);
@@ -2248,7 +2261,7 @@ void
 	_GCEntity* entity = mono_domain_alloc0(domain, sizeof(_GCEntity));
 	entity->addr = str;
 	entity->size = strlen(str) + 1;
-	if (trace_enabled & MEMPOOL_TRACE)
+	if ((trace_enabled & MEMPOOL_TRACE) && (trace_log & TRACE_LOG_PRINT))
 		g_print("mono_domain_strdup_collect with size %d addr %p. at file %s, line %d, function %s\n", entity->size, entity->addr, file, line, function);
 	g_ptr_array_add(mempool_gc_collects, entity);
 }
@@ -2360,7 +2373,7 @@ static void mono_domain_add_mempool_tracks(MonoClass* klass, void* addr, uint32_
 	_GCEntity* entity = mono_domain_alloc0(mono_domain_get(), sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
-	if (trace_enabled & MEMPOOL_TRACE)
+	if (trace_log & TRACE_LOG_PRINT)
 		g_print("mono_domain_add_mempool_tracks with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 	g_ptr_array_add(array, entity);
 
@@ -2382,7 +2395,7 @@ static void mono_domain_add_code_tracks(MonoClass* klass, void* addr, uint32_t s
 	_GCEntity* entity = mono_domain_alloc0(mono_domain_get(), sizeof(_GCEntity));
 	entity->addr = addr;
 	entity->size = size;
-	if (trace_enabled & CODE_TRACE)
+	if (trace_log & TRACE_LOG_PRINT)
 		g_print("mono_domain_add_code_tracks with size %d addr %p. at file %s, line %d, function %s\n", size, addr, file, line, function);
 	g_ptr_array_add(array, entity);
 }
@@ -2469,11 +2482,13 @@ void mono_domain_profiler(MonoDomain* domain)
 {
 	if (!domain)
 		return;
-	g_print("MonoDomain %p stats:\n", domain);
-	g_print("loader_bytes: %d\n", mono_perfcounters->loader_bytes);
-	momo_mempool_profiler(domain->mp);
-	mono_code_manager_profiler(domain->code_mp);
-	g_print("\n");
+	if (trace_log & TRACE_LOG_STATS)
+	{
+		g_print("MonoDomain %p stats:\n", domain);
+		g_print("loader_bytes: %d\n", mono_perfcounters->loader_bytes);
+		momo_mempool_profiler(domain->mp);
+		mono_code_manager_profiler(domain->code_mp);
+	}
 }
 
 gpointer
@@ -2490,7 +2505,8 @@ mono_domain_alloc_with_trace(MonoDomain* domain, guint size, const char *file, c
 	if (trace_enabled & MEMPOOL_TRACE)
 	{
 		mono_domain_add_mem_track(res, size);
-		g_print("mono_domain_alloc with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
+		if (trace_log & TRACE_LOG_PRINT)
+			g_print("mono_domain_alloc with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
 	}
 	return res;
 }
@@ -2508,7 +2524,8 @@ mono_domain_alloc0_with_trace(MonoDomain* domain, guint size, const char *file, 
 	if (trace_enabled & MEMPOOL_TRACE)
 	{
 		mono_domain_add_mem_track(res, size);
-		g_print("mono_domain_alloc0 with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
+		if (trace_log & TRACE_LOG_PRINT)
+			g_print("mono_domain_alloc0 with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
 	}
 	return res;
 }
@@ -2523,7 +2540,8 @@ mono_domain_code_reserve_with_trace(MonoDomain* domain, guint size, const char *
 	if (trace_enabled & CODE_TRACE)
 	{
 		mono_domain_add_mem_track(res, size);
-		g_print("mono_domain_code_reserve with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
+		if (trace_log & TRACE_LOG_PRINT)
+			g_print("mono_domain_code_reserve with size %d addr %p. at file %s, line %d, function %s\n", size, res, file, line, function);
 	}
 	return res;
 }
@@ -2538,7 +2556,8 @@ mono_domain_code_reserve_align_with_trace(MonoDomain* domain, guint size, guint 
 	if (trace_enabled & CODE_TRACE)
 	{
 		mono_domain_add_mem_track(res, size);
-		g_print("mono_domain_code_reserve_align %d with size %d addr %p. at file %s, line %d, function %s\n", align, size, res, file, line, function);
+		if(trace_log & TRACE_LOG_PRINT)
+			g_print("mono_domain_code_reserve_align %d with size %d addr %p. at file %s, line %d, function %s\n", align, size, res, file, line, function);
 	}
 	return res;
 }

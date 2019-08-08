@@ -264,9 +264,12 @@ clear_cached_vtable_for_unused_assembly(MonoVTable* vtable);
 void mono_domain_profiler(MonoDomain* domain);
 #define MEMPOOL_TRACE 1
 #define CODE_TRACE 2
+#define TRACE_LOG_PRINT 2
+#define TRACE_LOG_STATS 1
 MONO_API void
 mono_domain_set_trace(int enable);
-
+MONO_API void
+mono_domain_set_trace_log(int enable);
 // extend end
 
 MONO_END_DECLS
