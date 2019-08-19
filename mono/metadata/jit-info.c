@@ -1098,7 +1098,7 @@ void mono_jit_info_table_cleanup_for_unused_assembly(MonoDomain* domain, MonoAss
 			{
 				continue;
 			}
-			else if (jit_info->d.method->klass->image == image && !jit_info->d.method->dynamic)  // method
+			else if (check_method_in_image(jit_info->d.method, image) && !jit_info->d.method->dynamic)  // method
 			{
 				g_ptr_array_add(removed_jit_info_table_array, jit_info);
 			}

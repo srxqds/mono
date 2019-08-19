@@ -1439,6 +1439,9 @@ mono_create_jit_trampoline (MonoDomain *domain, MonoMethod *method, MonoError *e
 	// extend end
 	mono_domain_lock (domain);
 	g_hash_table_insert (domain_jit_info (domain)->jit_trampoline_hash, method, tramp);
+	// extend by dsqiu
+	// g_print("jit_trampoline_hash, insert: %s, %s, %s, OX%p\n", method->name, method->klass->name, method->klass->image->name, method);
+	// extend end
 	UnlockedIncrement (&jit_trampolines);
 	mono_domain_unlock (domain);
 
@@ -1728,7 +1731,7 @@ static_rgctx_trampoline_hash_foreach_remove(gpointer key, gpointer value, gpoint
 	RgctxTrampInfo * info = (RgctxTrampInfo *)key;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (info->m->klass->image == image)
+	if (check_method_in_image(info->m, image))
 	{
 		mono_domain_mempool_gc_collect(data->domain, info, sizeof(RgctxTrampInfo));
 		return TRUE;

@@ -4373,7 +4373,7 @@ mono_domain_remove_unused_type_hash(gpointer key, gpointer value, gpointer user_
 		// todo
 		g_printerr("MONO_TYPE_FNPTR not release!!!");
 	}
-	if (mono_class && mono_class->image == image)
+	if (check_class_in_image(mono_class, image))
 	{
 		return TRUE;
 	}
@@ -4394,7 +4394,7 @@ mono_domain_jit_code_hash_remove(gpointer key, gpointer value, gpointer user_dat
 {
 	MonoImage* image = (MonoImage*)user_data;
 	MonoMethod* method = (MonoMethod*)key;
-	if (method->klass && method->klass->image == image)
+	if (method->klass && check_method_in_image(method, image))
 	{
 		return TRUE;
 	}
@@ -4435,7 +4435,7 @@ mono_domain_remove_unused_assembly(MonoAssembly* assembly)
 	for (i = 0; i < domain->class_vtable_array->len; ++i)
 	{
 		MonoVTable* vtable = (MonoVTable *)g_ptr_array_index(domain->class_vtable_array, i);
-		if (vtable->klass->image == image)
+		if (check_class_in_image(vtable->klass, image))
 		{
 			g_ptr_array_add(removed_class_vtable_array, vtable);
 			g_ptr_array_add(removed_mono_class_array, vtable->klass);

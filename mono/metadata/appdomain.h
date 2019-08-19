@@ -270,6 +270,12 @@ MONO_API void
 mono_domain_set_trace(int enable);
 MONO_API void
 mono_domain_set_trace_log(int enable);
+
+MONO_API mono_bool
+check_class_in_image(MonoClass* klass, MonoImage* image);
+MONO_API mono_bool
+check_method_in_image(MonoMethod* method, MonoImage* image);
+
 // extend end
 
 MONO_END_DECLS

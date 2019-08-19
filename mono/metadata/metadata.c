@@ -7309,3 +7309,21 @@ mono_sizeof_type (const MonoType *ty)
 }
 
 
+// extend by dsqiu
+mono_bool
+check_class_in_image(MonoClass* klass, MonoImage* image)
+{
+	if (!klass)
+		return 0;
+	return type_in_image(m_class_get_byval_arg(klass), image);
+}
+
+mono_bool
+check_method_in_image(MonoMethod* method, MonoImage* image)
+{
+	if (method == NULL)
+		return 0;
+	return check_class_in_image(method->klass, image);
+}
+
+// extend end

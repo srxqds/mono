@@ -5129,7 +5129,7 @@ delegate_trampoline_hash_foreach_remove(gpointer key, gpointer value, gpointer u
 	MonoDelegateTrampInfo* tramp_info = (MonoDelegateTrampInfo*)value;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (pair->klass->image == image || (pair->method && pair->method->klass->image == image))
+	if (check_class_in_image(pair->klass, image) || (pair->method && check_method_in_image(pair->method, image)))
 	{
 		mono_domain_code_gc_collect(data->domain, tramp_info->code_start, tramp_info->code_size);
 		mono_domain_mempool_gc_collect(data->domain, pair, sizeof(MonoClassMethodPair));
@@ -5145,7 +5145,7 @@ method_code_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data
 	MonoMethod* method = (MonoMethod*)key;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (method->klass->image == image)
+	if (check_method_in_image(method, image))
 	{
 		mono_domain_mempool_gc_collect(data->domain, value, sizeof(gpointer));
 		return TRUE;
@@ -5159,8 +5159,12 @@ mono_method_key_foreach_remove(gpointer key, gpointer value, gpointer user_data)
 	MonoMethod* method = (MonoMethod*)key;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (method->klass->image == image)
+	// g_print("mono_method_key_foreach_remove, foreach, method addr: OX%p\n", method);
+	if (check_method_in_image(method, image))
 	{
+		// extend by dsqiu
+		// g_print("mono_method_key_foreach_remove, foreach: %s, %s, OX%p\n", method->name, method->klass->name, method);
+		// extend end
 		return TRUE;
 	}
 	return FALSE;
@@ -5172,7 +5176,7 @@ runtime_invoke_hash_foreach_remove(gpointer key, gpointer value, gpointer user_d
 	MonoMethod* method = (MonoMethod*)key;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (method->klass->image == image)
+	if (check_method_in_image(method, image))
 	{
 		RuntimeInvokeInfo *info = (RuntimeInvokeInfo*)value;
 		// remove invoke_method
@@ -5192,7 +5196,7 @@ invoke_method_hash_foreach_remove(gpointer key, gpointer value, gpointer user_da
 	MonoMethod* method = (MonoMethod*)key;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (method->klass->image == image)
+	if (check_method_in_image(method, image))
 	{
 		// 
 		mono_domain_remove_jit_info_for_method(data->domain, method);
@@ -5207,7 +5211,7 @@ jump_target_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data
 	MonoMethod* method = (MonoMethod*)key;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (method->klass->image == image)
+	if (check_method_in_image(method, image))
 	{
 		MonoJumpList * jump_list = (MonoJumpList *)value;
 		g_slist_free((GSList*)jump_list->list);
@@ -5224,7 +5228,7 @@ vtable_trampolines_hash_foreach_remove(gpointer key, gpointer value, gpointer us
 	MonoVTable* vt = (MonoVTable*)value;
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	MonoImage* image = data->assembly->image;
-	if (vt->klass->image == image)
+	if (check_class_in_image(vt->klass, image))
 	{
 		int i;
 		for (i = 0; i < vtable_trampolines_size; i++)

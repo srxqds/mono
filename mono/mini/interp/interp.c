@@ -6537,7 +6537,7 @@ interp_code_hash_foreach_remove(gpointer key, gpointer value, gpointer user_data
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	InterpMethod* interp_method = (InterpMethod*)value;
 	MonoImage* image = data->assembly->image;
-	if (method->klass->image == image)
+	if (check_method_in_image(method, image))
 	{
 		MonoDomain* domain = data->domain;
 		MonoMethodSignature *sig = mono_method_signature_internal(method);
@@ -6572,7 +6572,7 @@ interp_method_pointer_hash_foreach_remove(gpointer key, gpointer value, gpointer
 	_DomainAssemblyData* data = (_DomainAssemblyData*)user_data;
 	InterpMethod* interp_method = (InterpMethod*)value;
 	MonoImage* image = data->assembly->image;
-	if (interp_method->method->klass->image == image)
+	if (check_method_in_image(interp_method->method, image))
 	{
 		// todo remove addr
 		// NOTICE by dsqiu
